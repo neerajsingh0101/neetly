@@ -24,7 +24,15 @@ neetly notify_neetly_of_claude_events
 
 1. Download [neetly-macos.dmg](https://github.com/neerajsingh0101/neetly/releases/latest/download/neetly-macos.dmg)
 2. Open the DMG and drag `neetly.app` to Applications
-3. Open neetly from Applications
+3. Add the `neetly` CLI to your PATH:
+   ```bash
+   ln -sf /Applications/neetly.app/Contents/MacOS/neetly /usr/local/bin/neetly
+   ```
+4. Set up Claude Code notifications (one-time):
+   ```bash
+   neetly notify_neetly_of_claude_events
+   ```
+5. Open neetly from Applications
 
 ### Build from source
 
