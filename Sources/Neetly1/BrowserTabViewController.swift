@@ -3,6 +3,7 @@ import WebKit
 
 class BrowserTabViewController: NSViewController, WKNavigationDelegate {
     let tabId = UUID()
+    let seqId = SeqCounter.shared.nextId()
     let initialURL: String
     private var webView: WKWebView!
     private var urlBar: NSTextField!

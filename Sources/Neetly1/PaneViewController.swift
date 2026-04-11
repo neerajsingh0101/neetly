@@ -4,6 +4,7 @@ import AppKit
 /// Each tab is either a terminal or a browser.
 class PaneViewController: NSViewController {
     let paneId = UUID()
+    let seqId = SeqCounter.shared.nextId()
     private var tabs: [(kind: PaneTabKind, viewController: NSViewController)] = []
     private var activeTabIndex: Int = -1
     private let tabBar = TabBarView(frame: .zero)
@@ -110,24 +111,29 @@ class PaneViewController: NSViewController {
     func listTabs() -> [TabListEntry] {
         return tabs.enumerated().map { (i, tab) in
             let tabId: String
+            let tabSeq: Int
             let type: String
             let title: String
             switch tab.kind {
             case .terminal:
                 let vc = tab.viewController as! TerminalTabViewController
                 tabId = vc.tabId.uuidString
+                tabSeq = vc.seqId
                 type = "terminal"
                 let cmd = vc.command
                 title = cmd.isEmpty ? "Terminal" : cmd
             case .browser:
                 let vc = tab.viewController as! BrowserTabViewController
                 tabId = vc.tabId.uuidString
+                tabSeq = vc.seqId
                 type = "browser"
                 title = vc.currentTitle
             }
             return TabListEntry(
                 tabId: tabId,
+                tabSeq: tabSeq,
                 paneId: paneId.uuidString,
+                paneSeq: seqId,
                 type: type,
                 title: title,
                 isActive: i == activeTabIndex
@@ -135,15 +141,19 @@ class PaneViewController: NSViewController {
         }
     }
 
-    /// Find a terminal tab by its UUID (or prefix) and send text to it.
+    /// Find a terminal tab by sequential ID, UUID, or UUID prefix, and send text to it.
     func sendTextToTab(tabId: String, text: String) -> Bool {
         let needle = tabId.uppercased()
+        let seqNum = Int(tabId)
         for tab in tabs {
             if tab.kind == .terminal,
-               let vc = tab.viewController as? TerminalTabViewController,
-               vc.tabId.uuidString.hasPrefix(needle) {
-                vc.sendText(text)
-                return true
+               let vc = tab.viewController as? TerminalTabViewController {
+                let match = (seqNum != nil && vc.seqId == seqNum)
+                    || vc.tabId.uuidString.hasPrefix(needle)
+                if match {
+                    vc.sendText(text)
+                    return true
+                }
             }
         }
         return false

@@ -15,7 +15,7 @@ class WorkspaceWindowController: NSWindowController {
             backing: .buffered,
             defer: false
         )
-        window.title = "neetly1 - \(config.projectName)"
+        window.title = "neetly1 - \(config.workspaceName)"
         window.center()
         window.setFrameAutosaveName("WorkspaceWindow")
         super.init(window: window)

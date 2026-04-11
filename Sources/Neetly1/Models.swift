@@ -17,8 +17,24 @@ indirect enum LayoutNode {
 
 struct WorkspaceConfig {
     let repoPath: String
-    let projectName: String
+    let workspaceName: String
     let layout: LayoutNode
+}
+
+// MARK: - Repo Config (persisted)
+
+struct RepoConfig: Codable, Identifiable {
+    let id: UUID
+    let path: String
+    let name: String
+    let layoutText: String
+
+    init(path: String, layoutText: String) {
+        self.id = UUID()
+        self.path = path
+        self.name = URL(fileURLWithPath: path).lastPathComponent
+        self.layoutText = layoutText
+    }
 }
 
 // MARK: - Socket Command
@@ -35,10 +51,25 @@ struct SocketCommand: Codable {
 /// Info about a single tab, returned by tabs.list
 struct TabListEntry: Codable {
     let tabId: String
+    let tabSeq: Int
     let paneId: String
+    let paneSeq: Int
     let type: String      // "terminal" or "browser"
     let title: String
     let isActive: Bool
+}
+
+// MARK: - Sequential ID Counter (resets on restart)
+
+class SeqCounter {
+    static let shared = SeqCounter()
+    private var next = 1
+
+    func nextId() -> Int {
+        let id = next
+        next += 1
+        return id
+    }
 }
 
 // MARK: - Pane Tab
@@ -46,10 +77,4 @@ struct TabListEntry: Codable {
 enum PaneTabKind {
     case terminal
     case browser
-}
-
-struct PaneTabInfo {
-    let id: UUID
-    let kind: PaneTabKind
-    var title: String
 }

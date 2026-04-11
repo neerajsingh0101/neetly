@@ -110,7 +110,7 @@ func printUsage() {
     fputs("Usage: neetly <command> [args]\n\n", stderr)
     fputs("Commands:\n", stderr)
     fputs("  tabs                     List all tabs\n", stderr)
-    fputs("  send <tab-id> <text>     Send text to a terminal tab\n", stderr)
+    fputs("  send <tab#> <text>       Send text to a terminal tab (e.g. neetly send 1 \"ls\\n\")\n", stderr)
     fputs("  visit <url>              Open a browser tab\n", stderr)
     fputs("  run <command>            Open a terminal tab\n", stderr)
 }
@@ -118,13 +118,15 @@ func printUsage() {
 func printTabList(_ data: Data) {
     struct TabEntry: Codable {
         let tabId: String
+        let tabSeq: Int
         let paneId: String
+        let paneSeq: Int
         let type: String
         let title: String
         let isActive: Bool
     }
 
-    guard let tabs = try? JSONDecoder().decode([TabEntry].self, from: data) else {
+    guard var tabs = try? JSONDecoder().decode([TabEntry].self, from: data) else {
         fputs("Error: could not parse tab list\n", stderr)
         return
     }
@@ -134,16 +136,17 @@ func printTabList(_ data: Data) {
         return
     }
 
-    // Print header
-    print("TAB       PANE       TYPE      TITLE")
-    print(String(repeating: "-", count: 60))
+    tabs.sort { $0.tabSeq < $1.tabSeq }
+
+    print("TAB  PANE  TYPE      TITLE")
+    print(String(repeating: "-", count: 50))
 
     for tab in tabs {
-        let shortTab = tab.tabId.prefix(8).padding(toLength: 8, withPad: " ", startingAt: 0)
-        let shortPane = tab.paneId.prefix(8).padding(toLength: 8, withPad: " ", startingAt: 0)
+        let tabNum = String(tab.tabSeq).padding(toLength: 3, withPad: " ", startingAt: 0)
+        let paneNum = String(tab.paneSeq).padding(toLength: 4, withPad: " ", startingAt: 0)
         let type = tab.type.padding(toLength: 8, withPad: " ", startingAt: 0)
         let active = tab.isActive ? " *" : ""
-        print("\(shortTab)  \(shortPane)  \(type)  \(tab.title)\(active)")
+        print("\(tabNum)  \(paneNum)  \(type)  \(tab.title)\(active)")
     }
 }
 

@@ -3,6 +3,7 @@ import SwiftTerm
 
 class TerminalTabViewController: NSViewController {
     let tabId = UUID()
+    let seqId = SeqCounter.shared.nextId()
     let command: String
     let repoPath: String
     let environment: [String: String]
