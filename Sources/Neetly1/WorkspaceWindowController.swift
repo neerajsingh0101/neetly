@@ -4,6 +4,7 @@ class WorkspaceWindowController: NSWindowController {
     let config: WorkspaceConfig
     let socketServer: SocketServer
     var splitTree: SplitTreeController!
+    private var fileWatcher: FileWatcher?
 
     init(config: WorkspaceConfig, socketServer: SocketServer) {
         self.config = config
@@ -22,6 +23,9 @@ class WorkspaceWindowController: NSWindowController {
 
         setupContent()
         setupSocketHandler()
+        if config.autoReloadOnFileChange {
+            setupFileWatcher()
+        }
     }
 
     @available(*, unavailable)
@@ -102,6 +106,30 @@ class WorkspaceWindowController: NSWindowController {
         }
         // Fallback
         return splitTree.paneControllers.values.first
+    }
+
+    private func setupFileWatcher() {
+        NSLog("WorkspaceWindow: setting up file watcher for \(config.repoPath)")
+        fileWatcher = FileWatcher(repoPath: config.repoPath)
+        fileWatcher?.onChange = { [weak self] in
+            NSLog("WorkspaceWindow: reloading all browser tabs")
+            self?.reloadAllBrowserTabs()
+        }
+        fileWatcher?.start()
+    }
+
+    private func reloadAllBrowserTabs() {
+        var reloaded = 0
+        for pane in splitTree.paneControllers.values {
+            for browser in pane.allBrowserTabs() {
+                if browser.hasCompletedInitialLoad {
+                    NSLog("WorkspaceWindow: reloading \(browser.webView?.url?.absoluteString ?? "?")")
+                    browser.forceReload()
+                    reloaded += 1
+                }
+            }
+        }
+        NSLog("WorkspaceWindow: reloaded \(reloaded) browser tab(s)")
     }
 
     private func jsonResponse(_ dict: [String: Any]) -> Data? {

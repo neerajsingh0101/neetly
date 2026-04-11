@@ -38,14 +38,15 @@ struct SetupView: View {
         case .workspaceName(let repo):
             WorkspaceNameScreen(
                 repo: repo,
-                onStart: { workspaceName in
+                onStart: { workspaceName, autoReload in
                     let parser = LayoutParser()
                     let dedented = dedent(repo.layoutText)
                     guard let layout = parser.parse(dedented) else { return }
                     let config = WorkspaceConfig(
                         repoPath: repo.path,
                         workspaceName: workspaceName,
-                        layout: layout
+                        layout: layout,
+                        autoReloadOnFileChange: autoReload
                     )
                     onLaunch(config)
                 },
@@ -221,8 +222,9 @@ struct AddRepoScreen: View {
 struct WorkspaceNameScreen: View {
     let repo: RepoConfig
     @State private var workspaceName: String = ""
+    @State private var autoReload: Bool = true
     @FocusState private var isNameFocused: Bool
-    var onStart: (String) -> Void
+    var onStart: (String, Bool) -> Void
     var onBack: () -> Void
 
     var body: some View {
@@ -250,9 +252,20 @@ struct WorkspaceNameScreen: View {
                     .focused($isNameFocused)
                     .onSubmit {
                         let name = workspaceName.isEmpty ? "default" : workspaceName
-                        onStart(name)
+                        onStart(name, autoReload)
                     }
                 Text("A workspace name could be the feature name or the bug you are working on.")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+
+            Spacer()
+
+            VStack(alignment: .leading, spacing: 4) {
+                Toggle(isOn: $autoReload) {
+                    Text("Auto-reload browser on file changes")
+                }
+                Text("WKWebView doesn't support HMR. When enabled, browser tabs reload automatically when JavaScript files change in the repo.")
                     .font(.caption)
                     .foregroundColor(.secondary)
             }
@@ -263,7 +276,7 @@ struct WorkspaceNameScreen: View {
                 Spacer()
                 Button("Start") {
                     let name = workspaceName.isEmpty ? "default" : workspaceName
-                    onStart(name)
+                    onStart(name, autoReload)
                 }
                 .keyboardShortcut(.return)
                 .buttonStyle(.borderedProminent)

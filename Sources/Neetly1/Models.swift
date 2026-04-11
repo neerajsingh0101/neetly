@@ -19,6 +19,7 @@ struct WorkspaceConfig {
     let repoPath: String
     let workspaceName: String
     let layout: LayoutNode
+    let autoReloadOnFileChange: Bool
 }
 
 // MARK: - Repo Config (persisted)

@@ -5,10 +5,11 @@ class BrowserTabViewController: NSViewController, WKNavigationDelegate {
     let tabId = UUID()
     let seqId = SeqCounter.shared.nextId()
     let initialURL: String
-    private var webView: WKWebView!
+    private(set) var webView: WKWebView!
     private var urlBar: NSTextField!
     private(set) var currentTitle: String = "Browser"
     private(set) var favicon: NSImage?
+    private(set) var hasCompletedInitialLoad = false
     /// Callback when title or favicon changes, so the pane can refresh the tab bar.
     var onTitleChanged: (() -> Void)?
 
@@ -46,6 +47,7 @@ class BrowserTabViewController: NSViewController, WKNavigationDelegate {
 
         let reloadButton = NSButton(title: "R", target: self, action: #selector(reload))
         reloadButton.bezelStyle = .recessed
+        reloadButton.toolTip = "Reload"
         reloadButton.translatesAutoresizingMaskIntoConstraints = false
         container.addSubview(reloadButton)
 
@@ -111,14 +113,18 @@ class BrowserTabViewController: NSViewController, WKNavigationDelegate {
     }
 
     @objc private func reload() {
-        webView.reloadFromOrigin()
+        if webView.url != nil {
+            webView.reloadFromOrigin()
+        } else {
+            // Initial load never succeeded — navigate fresh
+            navigate(to: urlBar.stringValue.isEmpty ? initialURL : urlBar.stringValue)
+        }
     }
 
-    /// Force reload bypassing all caches — callable from menu/shortcut.
+    /// Force reload — same as clicking R. Skips if initial load hasn't completed.
     @objc func forceReload() {
-        guard let url = webView.url else { return }
-        let request = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalAndRemoteCacheData)
-        webView.load(request)
+        guard hasCompletedInitialLoad else { return }
+        webView.reloadFromOrigin()
     }
 
     func navigate(to urlString: String) {
@@ -134,16 +140,26 @@ class BrowserTabViewController: NSViewController, WKNavigationDelegate {
     // MARK: - WKNavigationDelegate
 
     func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
+        let nsError = error as NSError
+        if nsError.code == NSURLErrorCancelled {
+            // Reload was cancelled by a competing navigation — retry after a short delay
+            NSLog("BrowserTab: reload cancelled, retrying in 1s")
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
+                self?.webView.reloadFromOrigin()
+            }
+            return
+        }
         NSLog("BrowserTab: provisional navigation failed: \(error)")
-        currentTitle = "Error"
-        onTitleChanged?()
     }
 
     func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
+        let nsError = error as NSError
+        if nsError.code == NSURLErrorCancelled { return }  // handled above
         NSLog("BrowserTab: navigation failed: \(error)")
     }
 
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+        hasCompletedInitialLoad = true
         if let url = webView.url?.absoluteString {
             urlBar.stringValue = url
         }

@@ -148,6 +148,11 @@ class PaneViewController: NSViewController {
         return tabs[activeTabIndex].viewController as? BrowserTabViewController
     }
 
+    /// Returns ALL browser tabs in this pane, not just the active one.
+    func allBrowserTabs() -> [BrowserTabViewController] {
+        tabs.compactMap { $0.viewController as? BrowserTabViewController }
+    }
+
     /// Returns info about all tabs in this pane for the tabs.list command.
     func listTabs() -> [TabListEntry] {
         return tabs.enumerated().map { (i, tab) in
