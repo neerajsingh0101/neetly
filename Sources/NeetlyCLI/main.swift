@@ -9,13 +9,6 @@ import Foundation
 //   neetly run <command>            — open a terminal tab running <command>
 
 let env = ProcessInfo.processInfo.environment
-
-guard let socketPath = env["NEETLY_SOCKET"] else {
-    fputs("Error: NEETLY_SOCKET not set. Are you running inside neetly?\n", stderr)
-    exit(1)
-}
-
-let paneId = env["NEETLY_PANE_ID"] ?? ""
 let args = CommandLine.arguments
 
 guard args.count >= 2 else {
@@ -24,6 +17,19 @@ guard args.count >= 2 else {
 }
 
 let action = args[1]
+
+// Commands that don't need the socket
+if action == "notify_neetly_of_claude_events" {
+    setupClaudeHooks()
+    exit(0)
+}
+
+guard let socketPath = env["NEETLY_SOCKET"] else {
+    fputs("Error: NEETLY_SOCKET not set. Are you running inside neetly?\n", stderr)
+    exit(1)
+}
+
+let paneId = env["NEETLY_PANE_ID"] ?? ""
 
 var payload: [String: Any] = ["paneId": paneId]
 var expectResponse = false
@@ -136,6 +142,7 @@ func printUsage() {
     fputs("  visit <url> [--pane N] [--background]  Alias for browser open\n", stderr)
     fputs("  run <command>                          Open a terminal tab\n", stderr)
     fputs("  notify [color]                         Set workspace tab color (green/red/yellow/blue/orange/clear)\n", stderr)
+    fputs("  notify_neetly_of_claude_events         Add Claude Code hooks to ~/.claude/settings.json\n", stderr)
 }
 
 /// Parse positional args and --flags from an argument list.
@@ -255,4 +262,85 @@ func sendToSocket(socketPath: String, data: Data, expectResponse: Bool) -> Data?
 
     close(fd)
     return response
+}
+
+// MARK: - Claude Hooks Setup
+
+func setupClaudeHooks() {
+    let home = FileManager.default.homeDirectoryForCurrentUser
+    let settingsPath = home.appendingPathComponent(".claude/settings.json")
+
+    let neetlyHooks: [String: Any] = [
+        "Stop": [
+            [
+                "hooks": [
+                    ["type": "command", "command": "[ -n \"$NEETLY_SOCKET\" ] && neetly notify green || true"]
+                ]
+            ]
+        ],
+        "Notification": [
+            [
+                "matcher": "permission_prompt",
+                "hooks": [
+                    ["type": "command", "command": "[ -n \"$NEETLY_SOCKET\" ] && neetly notify red || true"]
+                ]
+            ]
+        ],
+        "UserPromptSubmit": [
+            [
+                "hooks": [
+                    ["type": "command", "command": "[ -n \"$NEETLY_SOCKET\" ] && neetly notify clear || true"]
+                ]
+            ]
+        ]
+    ]
+
+    // Read existing settings or start fresh
+    var settings: [String: Any] = [:]
+    if let data = try? Data(contentsOf: settingsPath),
+       let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+        settings = json
+    }
+
+    // Check if neetly hooks already exist
+    if let hooks = settings["hooks"] as? [String: Any],
+       let stop = hooks["Stop"] as? [[String: Any]] {
+        let alreadySetup = stop.contains { entry in
+            if let hookList = entry["hooks"] as? [[String: Any]] {
+                return hookList.contains { ($0["command"] as? String)?.contains("NEETLY_SOCKET") == true }
+            }
+            return false
+        }
+        if alreadySetup {
+            print("Neetly hooks are already set up in ~/.claude/settings.json")
+            return
+        }
+    }
+
+    // Merge hooks
+    var existingHooks = settings["hooks"] as? [String: Any] ?? [:]
+    for (event, newEntries) in neetlyHooks {
+        var existing = existingHooks[event] as? [[String: Any]] ?? []
+        if let entries = newEntries as? [[String: Any]] {
+            existing.append(contentsOf: entries)
+        }
+        existingHooks[event] = existing
+    }
+    settings["hooks"] = existingHooks
+
+    // Write back
+    do {
+        let dir = settingsPath.deletingLastPathComponent()
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let data = try JSONSerialization.data(withJSONObject: settings, options: [.prettyPrinted, .sortedKeys])
+        try data.write(to: settingsPath, options: .atomic)
+        print("Added neetly hooks to ~/.claude/settings.json")
+        print("")
+        print("  Stop              → workspace tab turns green")
+        print("  permission_prompt → workspace tab turns red")
+        print("  UserPromptSubmit  → workspace tab resets")
+    } catch {
+        fputs("Error writing ~/.claude/settings.json: \(error)\n", stderr)
+        exit(1)
+    }
 }

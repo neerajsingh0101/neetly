@@ -113,51 +113,18 @@ neetly notify red          # red (needs permission)
 neetly notify clear        # reset to normal
 ```
 
-#### Automatic notifications with Claude Code hooks
+#### Automatic notifications with Claude Code
 
-Add these hooks to your Claude Code settings (`~/.claude/settings.json`) for automatic tab color changes:
+One-time setup — adds hooks to `~/.claude/settings.json`:
 
-```json
-{
-  "hooks": {
-    "Stop": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "[ -n \"$NEETLY_SOCKET\" ] && neetly notify green || true"
-          }
-        ]
-      }
-    ],
-    "Notification": [
-      {
-        "matcher": "permission_prompt",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "[ -n \"$NEETLY_SOCKET\" ] && neetly notify red || true"
-          }
-        ]
-      }
-    ],
-    "UserPromptSubmit": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "[ -n \"$NEETLY_SOCKET\" ] && neetly notify clear || true"
-          }
-        ]
-      }
-    ]
-  }
-}
+```bash
+neetly notify_neetly_of_claude_events
 ```
 
+This wires up:
 - **Stop** (Claude finished) → tab turns green
-- **Notification/permission_prompt** (Claude needs approval) → tab turns red
-- **UserPromptSubmit** (you start typing) → tab resets to normal
+- **permission_prompt** (Claude needs approval) → tab turns red
+- **UserPromptSubmit** (you start typing) → tab resets
 
 Clicking a colored workspace tab also clears the color.
 
