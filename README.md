@@ -8,27 +8,20 @@ The code editor with terminal, browser, split panes and sensible notifications f
   </a>
 </p>
 
-# Automatic notifications with Claude Code
-
-Execute the following command to do one-time setup. It adds hooks to `~/.claude/settings.json` so that neetly
-is notified when Claude is done processing and is waiting. When Claude is done then the workspace tab turns "green". 
-If Claude is waiting for permission then the workspace tab turns "red". Clicking a colored workspace tab also clears the color.
-
-```bash
-/Applications/neetly.app/Contents/MacOS/neetly notify_neetly_of_claude_events
-```
-
 ## Install
 
 ### DMG (recommended)
 
-1. Download [neetly-macos.dmg](https://github.com/neerajsingh0101/neetly/releases/latest/download/neetly-macos.dmg)
-2. Open the DMG and drag `neetly.app` to Applications
-3. Set up Claude Code notifications (one-time):
+1. Download [neetly-macos.dmg](https://github.com/neerajsingh0101/neetly/releases/latest/download/neetly-macos.dmg) and open the DMG and drag `neetly.app` to Applications.
+2. Set up Claude Code notifications (one-time): Execute the following command to do a one-time setup. It adds hooks to `~/.claude/settings.json` so that neetly
+   is notified when Claude is done processing and is waiting. When Claude is done, the workspace tab turns "green". 
+    If Claude is waiting for permission, then the workspace tab turns "red". Clicking a colored workspace tab also clears the color.
+
    ```bash
    /Applications/neetly.app/Contents/MacOS/neetly notify_neetly_of_claude_events
    ```
-4. Open neetly from Applications
+   
+3. Open neetly from Applications.
 
 ### Build from source
 
