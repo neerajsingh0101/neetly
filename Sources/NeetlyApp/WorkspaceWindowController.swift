@@ -134,7 +134,7 @@ private class WorkspaceTab: NSView {
         layer?.cornerRadius = 4
 
         if let color = statusColor {
-            layer?.backgroundColor = color.withAlphaComponent(0.25).cgColor
+            layer?.backgroundColor = color.withAlphaComponent(0.45).cgColor
         } else if isActive {
             layer?.backgroundColor = NSColor.controlAccentColor.withAlphaComponent(0.15).cgColor
         } else {
@@ -270,6 +270,7 @@ class WorkspaceWindowController: NSWindowController {
 
         activeIndex = index
         let ws = workspaces[index]
+        ws.statusColor = nil
         ws.splitTree.view.frame = contentArea.bounds
         ws.splitTree.view.autoresizingMask = [.width, .height]
         contentArea.addSubview(ws.splitTree.view)
@@ -351,7 +352,7 @@ class WorkspaceWindowController: NSWindowController {
             let colorName = command.command ?? "green"
             let color: NSColor
             switch colorName {
-            case "green": color = .systemGreen
+            case "green": color = NSColor(red: 0.0, green: 0.5, blue: 0.0, alpha: 1.0)
             case "red": color = .systemRed
             case "yellow": color = .systemYellow
             case "blue": color = .systemBlue
