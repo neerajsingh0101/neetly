@@ -15,7 +15,7 @@ is notified when Claude is done processing and is waiting. When Claude is done t
 If Claude is waiting for permission then the workspace tab turns "red". Clicking a colored workspace tab also clears the color.
 
 ```bash
-neetly notify_neetly_of_claude_events
+/Applications/neetly.app/Contents/MacOS/neetly notify_neetly_of_claude_events
 ```
 
 ## Install
@@ -24,15 +24,11 @@ neetly notify_neetly_of_claude_events
 
 1. Download [neetly-macos.dmg](https://github.com/neerajsingh0101/neetly/releases/latest/download/neetly-macos.dmg)
 2. Open the DMG and drag `neetly.app` to Applications
-3. Add the `neetly` CLI to your PATH:
+3. Set up Claude Code notifications (one-time):
    ```bash
-   ln -sf /Applications/neetly.app/Contents/MacOS/neetly /usr/local/bin/neetly
+   /Applications/neetly.app/Contents/MacOS/neetly notify_neetly_of_claude_events
    ```
-4. Set up Claude Code notifications (one-time):
-   ```bash
-   neetly notify_neetly_of_claude_events
-   ```
-5. Open neetly from Applications
+4. Open neetly from Applications
 
 ### Build from source
 
