@@ -105,21 +105,61 @@ neetly run "npm test"
 
 ### Workspace notifications
 
-Change the workspace tab color to signal status across workspaces. Useful when Claude or a long-running task finishes while you're working in another workspace.
+Change the workspace tab color to signal status across workspaces. Useful when Claude finishes a task while you're working in another workspace.
 
 ```bash
-# Turn workspace tab green (default — task done)
-neetly notify
-
-# Other colors
-neetly notify red       # error / failed
-neetly notify yellow    # warning / needs attention
-neetly notify blue      # info
-neetly notify orange    # in progress
-
-# Reset to normal
-neetly notify clear
+neetly notify              # green (task done)
+neetly notify red          # red (needs permission)
+neetly notify clear        # reset to normal
 ```
+
+#### Automatic notifications with Claude Code hooks
+
+Add these hooks to your Claude Code settings (`~/.claude/settings.json`) for automatic tab color changes:
+
+```json
+{
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "[ -n \"$NEETLY_SOCKET\" ] && neetly notify green || true"
+          }
+        ]
+      }
+    ],
+    "Notification": [
+      {
+        "matcher": "permission_prompt",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "[ -n \"$NEETLY_SOCKET\" ] && neetly notify red || true"
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "[ -n \"$NEETLY_SOCKET\" ] && neetly notify clear || true"
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+- **Stop** (Claude finished) → tab turns green
+- **Notification/permission_prompt** (Claude needs approval) → tab turns red
+- **UserPromptSubmit** (you start typing) → tab resets to normal
+
+Clicking a colored workspace tab also clears the color.
 
 ## Keyboard Shortcuts
 

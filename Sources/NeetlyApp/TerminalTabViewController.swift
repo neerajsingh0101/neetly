@@ -37,7 +37,6 @@ class TerminalTabViewController: NSViewController {
     private func startProcess() {
         let shell = ProcessInfo.processInfo.environment["SHELL"] ?? "/bin/zsh"
 
-        // Build environment array: inherit current env + add our vars
         var env: [String] = []
         for (key, value) in ProcessInfo.processInfo.environment {
             env.append("\(key)=\(value)")
@@ -46,7 +45,6 @@ class TerminalTabViewController: NSViewController {
             env.append("\(key)=\(value)")
         }
 
-        // Add neetly CLI to PATH
         let execPath = ProcessInfo.processInfo.arguments[0]
         let execDir = URL(fileURLWithPath: execPath).deletingLastPathComponent().path
         if let existingPath = ProcessInfo.processInfo.environment["PATH"] {
@@ -55,13 +53,11 @@ class TerminalTabViewController: NSViewController {
 
         terminalView.startProcess(executable: shell, args: ["-l"], environment: env)
 
-        // Send the cd + command after shell initializes
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
             guard let self else { return }
             let escapedPath = self.repoPath.replacingOccurrences(of: "'", with: "'\\''")
             let cmd: String
             if self.command.isEmpty {
-                // Just cd to repo — plain shell
                 cmd = "cd '\(escapedPath)'\n"
             } else {
                 cmd = "cd '\(escapedPath)' && \(self.command)\n"
@@ -75,7 +71,6 @@ class TerminalTabViewController: NSViewController {
         view.window?.makeFirstResponder(terminalView)
     }
 
-    /// Send text to the terminal's PTY as if the user typed it.
     func sendText(_ text: String) {
         let bytes = Array(text.utf8)
         terminalView.send(data: bytes[...])
