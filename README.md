@@ -8,9 +8,7 @@ The code editor with terminal, browser, split panes and sensible notifications f
   </a>
 </p>
 
-## Install
-
-### DMG (recommended)
+## Installation instructions
 
 1. Download [neetly-macos.dmg](https://github.com/neerajsingh0101/neetly/releases/latest/download/neetly-macos.dmg) and open the DMG and drag `neetly.app` to Applications.
 2. Set up Claude Code notifications (one-time): Execute the following command to do a one-time setup. It adds hooks to `~/.claude/settings.json` so that neetly
