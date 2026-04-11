@@ -6,7 +6,7 @@ class TabBarView: NSView {
     var onCloseTab: ((Int) -> Void)?
     var onNewTerminal: (() -> Void)?
     var onNewBrowser: (() -> Void)?
-    private var buttons: [NSButton] = []
+    private var buttons: [NSView] = []
     private let newTerminalButton = NSButton()
     private let newBrowserButton = NSButton()
 
@@ -51,24 +51,22 @@ class TabBarView: NSView {
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError() }
 
-    func update(tabs: [(title: String, isActive: Bool)]) {
+    func update(tabs: [(title: String, icon: NSImage?, isActive: Bool)]) {
         buttons.forEach { $0.removeFromSuperview() }
         buttons.removeAll()
 
         var x: CGFloat = 2
         for (i, tab) in tabs.enumerated() {
-            let button = TabButton(index: i, title: tab.title, isActive: tab.isActive)
-            button.target = self
-            button.action = #selector(tabClicked(_:))
-            button.frame.origin = CGPoint(x: x, y: 2)
-            addSubview(button)
-            buttons.append(button)
-            x += button.frame.width + 2
+            let tabView = TabButton(
+                index: i, title: tab.title, icon: tab.icon, isActive: tab.isActive,
+                onSelect: { [weak self] idx in self?.onSelectTab?(idx) },
+                onClose: { [weak self] idx in self?.onCloseTab?(idx) }
+            )
+            tabView.frame.origin = CGPoint(x: x, y: 2)
+            addSubview(tabView)
+            buttons.append(tabView)
+            x += tabView.frame.width + 2
         }
-    }
-
-    @objc private func tabClicked(_ sender: TabButton) {
-        onSelectTab?(sender.tabIndex)
     }
 
     @objc private func newTerminalClicked() {
@@ -87,29 +85,106 @@ class TabBarView: NSView {
     }
 }
 
-private class TabButton: NSButton {
+private class TabButton: NSView {
     let tabIndex: Int
+    private let onSelect: (Int) -> Void
+    private let onClose: (Int) -> Void
+    private let isActive: Bool
+    private let closeBtn: NSButton
+    private var trackingArea: NSTrackingArea?
 
-    init(index: Int, title: String, isActive: Bool) {
+    init(index: Int, title: String, icon: NSImage?, isActive: Bool,
+         onSelect: @escaping (Int) -> Void, onClose: @escaping (Int) -> Void) {
         self.tabIndex = index
+        self.isActive = isActive
+        self.onSelect = onSelect
+        self.onClose = onClose
+        self.closeBtn = NSButton(frame: NSRect(x: 0, y: 3, width: 18, height: 18))
         super.init(frame: .zero)
+        wantsLayer = true
+        layer?.cornerRadius = 4
 
-        self.title = title
-        bezelStyle = .recessed
-        setButtonType(.onOff)
-        state = isActive ? .on : .off
-        font = .systemFont(ofSize: 12)
-        isBordered = true
-        sizeToFit()
-
-        // Ensure minimum width
-        let minWidth: CGFloat = 80
-        if frame.width < minWidth {
-            frame.size.width = minWidth
+        if isActive {
+            layer?.backgroundColor = NSColor.controlAccentColor.withAlphaComponent(0.15).cgColor
+        } else {
+            layer?.backgroundColor = NSColor.clear.cgColor
         }
-        frame.size.height = 26
+
+        // Icon
+        var x: CGFloat = 6
+        if let icon = icon {
+            let iconView = NSImageView(frame: NSRect(x: x, y: 5, width: 14, height: 14))
+            let resized = NSImage(size: NSSize(width: 14, height: 14))
+            resized.lockFocus()
+            icon.draw(in: NSRect(x: 0, y: 0, width: 14, height: 14))
+            resized.unlockFocus()
+            iconView.image = resized
+            addSubview(iconView)
+            x += 18
+        }
+
+        // Title
+        let label = NSTextField(labelWithString: title)
+        label.font = .systemFont(ofSize: 11, weight: isActive ? .semibold : .regular)
+        label.textColor = .labelColor
+        label.lineBreakMode = .byTruncatingTail
+        label.frame = NSRect(x: x, y: 4, width: 90, height: 16)
+        addSubview(label)
+
+        // Close button — hidden by default, shown on hover
+        closeBtn.image = NSImage(systemSymbolName: "xmark", accessibilityDescription: "Close tab")
+        closeBtn.imagePosition = .imageOnly
+        closeBtn.isBordered = false
+        closeBtn.target = self
+        closeBtn.action = #selector(closeClicked)
+        closeBtn.imageScaling = .scaleProportionallyDown
+        closeBtn.isHidden = true
+        let closeX = x + label.frame.width + 4
+        closeBtn.frame.origin.x = closeX
+        addSubview(closeBtn)
+
+        frame.size = NSSize(width: closeX + 22, height: 24)
+
+        // Clamp width
+        let minW: CGFloat = 80
+        let maxW: CGFloat = 160
+        frame.size.width = min(max(frame.width, minW), maxW)
+
+        // Adjust label width to fit
+        label.frame.size.width = frame.width - x - 26
+        closeBtn.frame.origin.x = frame.width - 22
     }
 
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError() }
+
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        if let ta = trackingArea { removeTrackingArea(ta) }
+        trackingArea = NSTrackingArea(
+            rect: bounds,
+            options: [.mouseEnteredAndExited, .activeInActiveApp],
+            owner: self
+        )
+        addTrackingArea(trackingArea!)
+    }
+
+    override func mouseEntered(with event: NSEvent) {
+        closeBtn.isHidden = false
+    }
+
+    override func mouseExited(with event: NSEvent) {
+        closeBtn.isHidden = true
+    }
+
+    override func mouseDown(with event: NSEvent) {
+        let loc = convert(event.locationInWindow, from: nil)
+        if loc.x < frame.width - 22 {
+            onSelect(tabIndex)
+        }
+    }
+
+    @objc private func closeClicked() {
+        onClose(tabIndex)
+    }
 }

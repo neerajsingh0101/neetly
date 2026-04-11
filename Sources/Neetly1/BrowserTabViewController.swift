@@ -8,6 +8,9 @@ class BrowserTabViewController: NSViewController, WKNavigationDelegate {
     private var webView: WKWebView!
     private var urlBar: NSTextField!
     private(set) var currentTitle: String = "Browser"
+    private(set) var favicon: NSImage?
+    /// Callback when title or favicon changes, so the pane can refresh the tab bar.
+    var onTitleChanged: (() -> Void)?
 
     init(url: String) {
         self.initialURL = url
@@ -108,7 +111,14 @@ class BrowserTabViewController: NSViewController, WKNavigationDelegate {
     }
 
     @objc private func reload() {
-        webView.reload()
+        webView.reloadFromOrigin()
+    }
+
+    /// Force reload bypassing all caches — callable from menu/shortcut.
+    @objc func forceReload() {
+        guard let url = webView.url else { return }
+        let request = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalAndRemoteCacheData)
+        webView.load(request)
     }
 
     func navigate(to urlString: String) {
@@ -123,10 +133,50 @@ class BrowserTabViewController: NSViewController, WKNavigationDelegate {
 
     // MARK: - WKNavigationDelegate
 
+    func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
+        NSLog("BrowserTab: provisional navigation failed: \(error)")
+        currentTitle = "Error"
+        onTitleChanged?()
+    }
+
+    func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
+        NSLog("BrowserTab: navigation failed: \(error)")
+    }
+
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
         if let url = webView.url?.absoluteString {
             urlBar.stringValue = url
         }
-        currentTitle = webView.title ?? webView.url?.host ?? "Browser"
+        currentTitle = shortTitle(from: webView.title, url: webView.url)
+        fetchFavicon(for: webView.url)
+        onTitleChanged?()
+    }
+
+    /// Build a short tab title: first two words of the page title, or the hostname.
+    private func shortTitle(from title: String?, url: URL?) -> String {
+        if let title = title, !title.isEmpty {
+            let words = title.split(separator: " ").prefix(2)
+            return words.joined(separator: " ")
+        }
+        return url?.host ?? "Browser"
+    }
+
+    /// Fetch /favicon.ico from the site's origin.
+    private func fetchFavicon(for url: URL?) {
+        guard let url = url,
+              let scheme = url.scheme,
+              let host = url.host,
+              let faviconURL = URL(string: "\(scheme)://\(host)/favicon.ico") else { return }
+
+        URLSession.shared.dataTask(with: faviconURL) { [weak self] data, response, _ in
+            guard let data = data,
+                  let http = response as? HTTPURLResponse,
+                  http.statusCode == 200,
+                  let image = NSImage(data: data) else { return }
+            DispatchQueue.main.async {
+                self?.favicon = image
+                self?.onTitleChanged?()
+            }
+        }.resume()
     }
 }

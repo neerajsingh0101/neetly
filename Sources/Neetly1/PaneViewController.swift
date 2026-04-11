@@ -34,6 +34,9 @@ class PaneViewController: NSViewController {
         tabBar.onSelectTab = { [weak self] index in
             self?.selectTab(at: index)
         }
+        tabBar.onCloseTab = { [weak self] index in
+            self?.closeTab(at: index)
+        }
         tabBar.onNewTerminal = { [weak self] in
             self?.addTerminalTab(command: "")
         }
@@ -75,6 +78,7 @@ class PaneViewController: NSViewController {
 
     func addBrowserTab(url: String, background: Bool = false) {
         let vc = BrowserTabViewController(url: url)
+        vc.onTitleChanged = { [weak self] in self?.refreshTabBar() }
         addChild(vc)
         tabs.append((kind: .browser, viewController: vc))
         if background {
@@ -109,7 +113,40 @@ class PaneViewController: NSViewController {
         refreshTabBar()
     }
 
+    func closeTab(at index: Int) {
+        guard index >= 0 && index < tabs.count else { return }
+
+        // Remove from view if it's the active tab
+        if index == activeTabIndex {
+            tabs[index].viewController.view.removeFromSuperview()
+        }
+
+        let vc = tabs[index].viewController
+        vc.removeFromParent()
+        tabs.remove(at: index)
+
+        // Adjust active index
+        if tabs.isEmpty {
+            activeTabIndex = -1
+        } else if index <= activeTabIndex {
+            activeTabIndex = max(0, activeTabIndex - 1)
+            selectTab(at: activeTabIndex)
+        } else {
+            refreshTabBar()
+        }
+    }
+
+    func closeActiveTab() {
+        guard activeTabIndex >= 0 else { return }
+        closeTab(at: activeTabIndex)
+    }
+
     func tabCount() -> Int { tabs.count }
+
+    func activeBrowserTab() -> BrowserTabViewController? {
+        guard activeTabIndex >= 0 && activeTabIndex < tabs.count else { return nil }
+        return tabs[activeTabIndex].viewController as? BrowserTabViewController
+    }
 
     /// Returns info about all tabs in this pane for the tabs.list command.
     func listTabs() -> [TabListEntry] {
@@ -174,16 +211,20 @@ class PaneViewController: NSViewController {
     }
 
     private func refreshTabBar() {
-        let tabInfos: [(title: String, isActive: Bool)] = tabs.enumerated().map { (i, tab) in
+        let tabInfos: [(title: String, icon: NSImage?, isActive: Bool)] = tabs.enumerated().map { (i, tab) in
             let title: String
+            let icon: NSImage?
             switch tab.kind {
             case .terminal:
                 let termCmd = (tab.viewController as! TerminalTabViewController).command
                 title = termCmd.isEmpty ? "Terminal" : termCmd
+                icon = NSImage(systemSymbolName: "terminal", accessibilityDescription: nil)
             case .browser:
-                title = (tab.viewController as! BrowserTabViewController).currentTitle
+                let vc = tab.viewController as! BrowserTabViewController
+                title = vc.currentTitle
+                icon = vc.favicon ?? NSImage(systemSymbolName: "globe", accessibilityDescription: nil)
             }
-            return (title: title, isActive: i == activeTabIndex)
+            return (title: title, icon: icon, isActive: i == activeTabIndex)
         }
         tabBar.update(tabs: tabInfos)
     }

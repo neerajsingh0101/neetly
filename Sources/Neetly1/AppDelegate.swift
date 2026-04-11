@@ -64,6 +64,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         paneMenu.addItem(withTitle: "New Terminal", action: #selector(newTerminalTab), keyEquivalent: "t")
         paneMenu.addItem(withTitle: "New Browser", action: #selector(newBrowserTab), keyEquivalent: "t")
         paneMenu.items.last?.keyEquivalentModifierMask = [.command, .shift]
+        paneMenu.addItem(withTitle: "Close Tab", action: #selector(closeCurrentTab), keyEquivalent: "w")
+        paneMenu.addItem(withTitle: "Reload Browser", action: #selector(reloadBrowser), keyEquivalent: "r")
         paneMenu.addItem(.separator())
         paneMenu.addItem(withTitle: "Next Tab", action: #selector(nextTab), keyEquivalent: "]")
         paneMenu.items.last?.keyEquivalentModifierMask = [.command, .shift]
@@ -73,6 +75,18 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         mainMenu.addItem(paneMenuItem)
 
         NSApp.mainMenu = mainMenu
+    }
+
+    @objc private func reloadBrowser() {
+        if let pane = findFocusedPane(), let browser = pane.activeBrowserTab() {
+            browser.forceReload()
+        }
+    }
+
+    @objc private func closeCurrentTab() {
+        if let pane = findFocusedPane(), pane.tabCount() > 0 {
+            pane.closeActiveTab()
+        }
     }
 
     @objc private func newTerminalTab() {
