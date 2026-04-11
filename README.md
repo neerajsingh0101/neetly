@@ -103,6 +103,24 @@ neetly send 1 "time\n"
 neetly run "npm test"
 ```
 
+### Workspace notifications
+
+Change the workspace tab color to signal status across workspaces. Useful when Claude or a long-running task finishes while you're working in another workspace.
+
+```bash
+# Turn workspace tab green (default — task done)
+neetly notify
+
+# Other colors
+neetly notify red       # error / failed
+neetly notify yellow    # warning / needs attention
+neetly notify blue      # info
+neetly notify orange    # in progress
+
+# Reset to normal
+neetly notify clear
+```
+
 ## Keyboard Shortcuts
 
 | Shortcut | Action |

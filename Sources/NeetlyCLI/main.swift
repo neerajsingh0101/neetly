@@ -78,6 +78,12 @@ case "run":
     payload["action"] = "terminal.run"
     payload["command"] = args[2...].joined(separator: " ")
 
+case "notify":
+    // neetly notify [color]  — default green, or: red, yellow, blue, orange, clear
+    let color = args.count >= 3 ? args[2] : "green"
+    payload["action"] = "workspace.notify"
+    payload["command"] = color
+
 default:
     fputs("Unknown command: \(action)\n\n", stderr)
     printUsage()
@@ -129,6 +135,7 @@ func printUsage() {
     fputs("  browser open <url> [--pane N] [--background]  Open a browser tab\n", stderr)
     fputs("  visit <url> [--pane N] [--background]  Alias for browser open\n", stderr)
     fputs("  run <command>                          Open a terminal tab\n", stderr)
+    fputs("  notify [color]                         Set workspace tab color (green/red/yellow/blue/orange/clear)\n", stderr)
 }
 
 /// Parse positional args and --flags from an argument list.

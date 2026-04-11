@@ -6,6 +6,9 @@ class Workspace {
     let socketServer: SocketServer
     let splitTree: SplitTreeController
     var fileWatcher: FileWatcher?
+    /// Status color for the workspace tab. nil = default, green = done, etc.
+    var statusColor: NSColor?
+    var onStatusChanged: (() -> Void)?
 
     init(config: WorkspaceConfig) {
         self.socketServer = SocketServer()
@@ -76,7 +79,7 @@ class WorkspaceTabBar: NSView {
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError() }
 
-    func update(workspaces: [(repoName: String, workspaceName: String, isActive: Bool)]) {
+    func update(workspaces: [(repoName: String, workspaceName: String, isActive: Bool, statusColor: NSColor?)]) {
         tabViews.forEach { $0.removeFromSuperview() }
         tabViews.removeAll()
 
@@ -86,6 +89,7 @@ class WorkspaceTabBar: NSView {
         for (i, ws) in workspaces.enumerated() {
             let tab = WorkspaceTab(
                 index: i, repoName: ws.repoName, workspaceName: ws.workspaceName, isActive: ws.isActive,
+                statusColor: ws.statusColor,
                 onSelect: { [weak self] idx in self?.onSelectWorkspace?(idx) },
                 onClose: { [weak self] idx in self?.onCloseWorkspace?(idx) }
             )
@@ -119,6 +123,7 @@ private class WorkspaceTab: NSView {
     private var trackingArea: NSTrackingArea?
 
     init(index: Int, repoName: String, workspaceName: String, isActive: Bool,
+         statusColor: NSColor?,
          onSelect: @escaping (Int) -> Void, onClose: @escaping (Int) -> Void) {
         self.index = index
         self.onSelect = onSelect
@@ -127,9 +132,14 @@ private class WorkspaceTab: NSView {
         super.init(frame: .zero)
         wantsLayer = true
         layer?.cornerRadius = 4
-        layer?.backgroundColor = isActive
-            ? NSColor.controlAccentColor.withAlphaComponent(0.15).cgColor
-            : NSColor.clear.cgColor
+
+        if let color = statusColor {
+            layer?.backgroundColor = color.withAlphaComponent(0.25).cgColor
+        } else if isActive {
+            layer?.backgroundColor = NSColor.controlAccentColor.withAlphaComponent(0.15).cgColor
+        } else {
+            layer?.backgroundColor = NSColor.clear.cgColor
+        }
 
         // Repo name (top line, smaller, secondary color)
         let repoLabel = NSTextField(labelWithString: repoName)
@@ -239,6 +249,9 @@ class WorkspaceWindowController: NSWindowController {
 
     func addWorkspace(config: WorkspaceConfig) {
         let ws = Workspace(config: config)
+        ws.onStatusChanged = { [weak self] in
+            self?.refreshTabBar()
+        }
         ws.setupSocketHandler { [weak self, weak ws] command in
             guard let ws = ws else { return nil }
             return self?.handleSocketCommand(command, workspace: ws)
@@ -288,7 +301,7 @@ class WorkspaceWindowController: NSWindowController {
     private func refreshTabBar() {
         let repoName = { (path: String) in URL(fileURLWithPath: path).lastPathComponent }
         let tabs = workspaces.enumerated().map { (i, ws) in
-            (repoName: repoName(ws.config.repoPath), workspaceName: ws.config.workspaceName, isActive: i == activeIndex)
+            (repoName: repoName(ws.config.repoPath), workspaceName: ws.config.workspaceName, isActive: i == activeIndex, statusColor: ws.statusColor)
         }
         workspaceTabBar.update(workspaces: tabs)
     }
@@ -333,6 +346,22 @@ class WorkspaceWindowController: NSWindowController {
                 }
             }
             return jsonResponse(["ok": false, "error": "tab not found: \(tabId)"])
+
+        case "workspace.notify":
+            let colorName = command.command ?? "green"
+            let color: NSColor
+            switch colorName {
+            case "green": color = .systemGreen
+            case "red": color = .systemRed
+            case "yellow": color = .systemYellow
+            case "blue": color = .systemBlue
+            case "orange": color = .systemOrange
+            case "clear", "none", "reset": ws.statusColor = nil; ws.onStatusChanged?(); return nil
+            default: color = .systemGreen
+            }
+            ws.statusColor = color
+            ws.onStatusChanged?()
+            return nil
 
         default:
             return nil
