@@ -5,6 +5,7 @@ import SwiftUI
 enum SetupScreen {
     case repoList
     case addRepo
+    case editLayout(RepoConfig)
     case workspaceName(RepoConfig)
 }
 
@@ -21,7 +22,8 @@ struct SetupView: View {
             RepoListScreen(
                 repos: $repos,
                 onSelectRepo: { repo in screen = .workspaceName(repo) },
-                onAddRepo: { screen = .addRepo }
+                onAddRepo: { screen = .addRepo },
+                onEditLayout: { repo in screen = .editLayout(repo) }
             )
             .onAppear { repos = RepoStore.shared.load() }
 
@@ -29,6 +31,17 @@ struct SetupView: View {
             AddRepoScreen(
                 onAdd: { repo in
                     RepoStore.shared.add(repo)
+                    repos = RepoStore.shared.load()
+                    screen = .repoList
+                },
+                onCancel: { screen = .repoList }
+            )
+
+        case .editLayout(let repo):
+            EditLayoutScreen(
+                repo: repo,
+                onSave: { updated in
+                    RepoStore.shared.update(updated)
                     repos = RepoStore.shared.load()
                     screen = .repoList
                 },
@@ -70,6 +83,7 @@ struct RepoListScreen: View {
     @Binding var repos: [RepoConfig]
     var onSelectRepo: (RepoConfig) -> Void
     var onAddRepo: () -> Void
+    var onEditLayout: (RepoConfig) -> Void
 
     var body: some View {
         VStack(spacing: 0) {
@@ -91,14 +105,11 @@ struct RepoListScreen: View {
             if repos.isEmpty {
                 Spacer()
                 VStack(spacing: 12) {
-                    Image(systemName: "folder.badge.plus")
-                        .font(.system(size: 40))
-                        .foregroundColor(.secondary)
                     Text("No repos added yet")
-                        .font(.title3)
+                        .font(.system(size: 24, weight: .medium))
                         .foregroundColor(.secondary)
                     Text("Click \"Add Repo\" to get started")
-                        .font(.caption)
+                        .font(.system(size: 16))
                         .foregroundColor(.secondary)
                 }
                 Spacer()
@@ -108,8 +119,33 @@ struct RepoListScreen: View {
                         Button(action: { onSelectRepo(repo) }) {
                             HStack {
                                 VStack(alignment: .leading, spacing: 6) {
-                                    Text(repo.name)
-                                        .font(.system(size: 24, weight: .semibold))
+                                    HStack(spacing: 8) {
+                                        Text(repo.name)
+                                            .font(.system(size: 24, weight: .semibold))
+                                        Menu {
+                                            Button(action: { onEditLayout(repo) }) {
+                                                Label("Change Layout", systemImage: "rectangle.split.3x1")
+                                            }
+                                            Divider()
+                                            Button(role: .destructive, action: {
+                                                RepoStore.shared.remove(id: repo.id)
+                                                repos = RepoStore.shared.load()
+                                            }) {
+                                                Label("Delete", systemImage: "trash")
+                                            }
+                                        } label: {
+                                            Image(systemName: "ellipsis")
+                                                .font(.system(size: 14, weight: .bold))
+                                                .foregroundColor(.primary.opacity(0.6))
+                                                .frame(width: 26, height: 26)
+                                                .background(
+                                                    RoundedRectangle(cornerRadius: 5)
+                                                        .fill(Color.primary.opacity(0.001))
+                                                )
+                                                .contentShape(Rectangle())
+                                        }
+                                        .buttonStyle(HoverButtonStyle())
+                                    }
                                     Text(repo.path.replacingOccurrences(of: FileManager.default.homeDirectoryForCurrentUser.path, with: "~"))
                                         .font(.system(size: 19, design: .monospaced))
                                         .foregroundColor(.secondary)
@@ -119,17 +155,10 @@ struct RepoListScreen: View {
                                     .font(.system(size: 13, weight: .semibold))
                                     .foregroundColor(.secondary)
                             }
-                            .frame(maxWidth: .infinity, alignment: .leading)
                             .contentShape(Rectangle())
                             .padding(.vertical, 4)
                         }
                         .buttonStyle(.plain)
-                    }
-                    .onDelete { indexSet in
-                        for i in indexSet {
-                            RepoStore.shared.remove(id: repos[i].id)
-                        }
-                        repos = RepoStore.shared.load()
                     }
                 }
             }
@@ -147,9 +176,7 @@ struct AddRepoScreen: View {
         left:
           run: claude --dangerously-skip-permissions
         right:
-          tabs:
-            run: bin/setup;bin/launch --neetly
-            visit: http://localhost:3000
+          run: bin/setup-mise;bin/launch --neetly
         """
     @State private var errorMessage: String?
     var onAdd: (RepoConfig) -> Void
@@ -248,7 +275,7 @@ struct WorkspaceNameScreen: View {
             Spacer()
 
             VStack(alignment: .leading, spacing: 8) {
-                Text("Workspace Name")
+                Text("New Workspace Name")
                     .font(.system(size: 22, weight: .semibold))
                 TextField("", text: $workspaceName)
                     .textFieldStyle(.roundedBorder)
@@ -304,5 +331,68 @@ struct WorkspaceNameScreen: View {
             isNameFocused = true
             layoutText = repo.layoutText
         }
+    }
+}
+
+// MARK: - Screen 4: Edit Layout
+
+struct EditLayoutScreen: View {
+    let repo: RepoConfig
+    @State private var layoutText: String = ""
+    var onSave: (RepoConfig) -> Void
+    var onCancel: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack {
+                Button(action: onCancel) {
+                    Label("Back", systemImage: "chevron.left")
+                }
+                .buttonStyle(.plain)
+                Spacer()
+            }
+
+            Text(repo.name)
+                .font(.system(size: 29, weight: .bold, design: .monospaced))
+
+            Text("Default Layout")
+                .font(.system(size: 18, weight: .semibold))
+
+            TextEditor(text: $layoutText)
+                .font(.system(size: 15, design: .monospaced))
+                .border(Color.gray.opacity(0.3))
+
+            HStack {
+                Spacer()
+                Button("Save") {
+                    let updated = RepoConfig(id: repo.id, path: repo.path, name: repo.name, layoutText: layoutText)
+                    onSave(updated)
+                }
+                .keyboardShortcut(.return)
+                .buttonStyle(.borderedProminent)
+                .controlSize(.large)
+            }
+            .padding(.bottom, 8)
+        }
+        .padding(24)
+        .frame(minWidth: 600, minHeight: 400)
+        .onAppear { layoutText = repo.layoutText }
+    }
+}
+
+// MARK: - Hover Button Style
+
+struct HoverButtonStyle: ButtonStyle {
+    @State private var isHovered = false
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .background(
+                RoundedRectangle(cornerRadius: 5)
+                    .fill(isHovered ? Color.primary.opacity(0.1) : Color.clear)
+            )
+            .onHover { hovering in
+                isHovered = hovering
+            }
     }
 }

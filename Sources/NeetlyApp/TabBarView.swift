@@ -40,8 +40,8 @@ class TabBarView: NSView {
         addSubview(newBrowserButton)
 
         // Split columns button
-        splitColButton.image = NSImage(systemSymbolName: "rectangle.split.1x2", accessibilityDescription: "Split Columns")
-        splitColButton.toolTip = "Split Columns"
+        splitColButton.image = NSImage(systemSymbolName: "rectangle.split.2x1", accessibilityDescription: "Split into Columns")
+        splitColButton.toolTip = "Split into Columns"
         splitColButton.bezelStyle = .recessed
         splitColButton.imagePosition = .imageOnly
         splitColButton.target = self
@@ -50,8 +50,8 @@ class TabBarView: NSView {
         addSubview(splitColButton)
 
         // Split rows button
-        splitRowButton.image = NSImage(systemSymbolName: "rectangle.split.2x1", accessibilityDescription: "Split Rows")
-        splitRowButton.toolTip = "Split Rows"
+        splitRowButton.image = NSImage(systemSymbolName: "rectangle.split.1x2", accessibilityDescription: "Split into Rows")
+        splitRowButton.toolTip = "Split into Rows"
         splitRowButton.bezelStyle = .recessed
         splitRowButton.imagePosition = .imageOnly
         splitRowButton.target = self

@@ -43,4 +43,12 @@ class RepoStore {
         repos.removeAll { $0.id == id }
         save(repos)
     }
+
+    func update(_ repo: RepoConfig) {
+        var repos = load()
+        if let idx = repos.firstIndex(where: { $0.id == repo.id }) {
+            repos[idx] = repo
+        }
+        save(repos)
+    }
 }

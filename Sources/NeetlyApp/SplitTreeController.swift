@@ -82,6 +82,10 @@ class SplitTreeController: NSViewController {
             guard let self, let pane else { return }
             self.splitPane(pane, direction: direction)
         }
+        pane.onEmpty = { [weak self, weak pane] in
+            guard let self, let pane else { return }
+            self.collapsePane(pane)
+        }
         return pane
     }
 
@@ -121,6 +125,34 @@ class SplitTreeController: NSViewController {
 
         // Trigger viewDidAppear for the new pane's terminal
         newPane.view.window?.makeFirstResponder(newPane.view)
+    }
+
+    /// When the last tab of a pane is closed, collapse it:
+    /// remove the empty pane and promote the sibling to take the parent split's place.
+    func collapsePane(_ pane: PaneViewController) {
+        let emptyView = pane.view
+        guard let splitView = emptyView.superview as? NSSplitView else {
+            // Not inside a split — it's the root pane, nothing to collapse
+            return
+        }
+
+        // Find the sibling view (the other child of the split)
+        let siblings = splitView.arrangedSubviews
+        guard let sibling = siblings.first(where: { $0 !== emptyView }) else { return }
+
+        // Remove the empty pane
+        paneControllers.removeValue(forKey: pane.paneId)
+        pane.removeFromParent()
+
+        // Replace the NSSplitView with the sibling in the parent
+        guard let parent = splitView.superview else { return }
+        sibling.removeFromSuperview()
+        sibling.frame = splitView.frame
+        sibling.autoresizingMask = splitView.autoresizingMask
+        parent.replaceSubview(splitView, with: sibling)
+
+        // Focus the sibling
+        sibling.window?.makeFirstResponder(sibling)
     }
 
     /// Find a pane controller by its UUID string.

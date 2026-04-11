@@ -13,6 +13,8 @@ class PaneViewController: NSViewController {
     let socketServer: SocketServer
     /// Called when user clicks split column/row button. SplitTreeController sets this.
     var onSplit: ((SplitDirection) -> Void)?
+    /// Called when the last tab is closed. SplitTreeController collapses the pane.
+    var onEmpty: (() -> Void)?
 
     /// Environment dict with this pane's own ID baked in
     var socketEnvironment: [String: String] {
@@ -136,6 +138,8 @@ class PaneViewController: NSViewController {
         // Adjust active index
         if tabs.isEmpty {
             activeTabIndex = -1
+            onEmpty?()
+            return
         } else if index <= activeTabIndex {
             activeTabIndex = max(0, activeTabIndex - 1)
             selectTab(at: activeTabIndex)

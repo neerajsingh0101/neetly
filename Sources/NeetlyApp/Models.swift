@@ -37,6 +37,13 @@ struct RepoConfig: Codable, Identifiable {
         self.name = URL(fileURLWithPath: path).lastPathComponent
         self.layoutText = layoutText
     }
+
+    init(id: UUID, path: String, name: String, layoutText: String) {
+        self.id = id
+        self.path = path
+        self.name = name
+        self.layoutText = layoutText
+    }
 }
 
 // MARK: - Socket Command
