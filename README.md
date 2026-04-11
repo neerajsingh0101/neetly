@@ -1,6 +1,6 @@
 # neetly
 
-A terminal multiplexer with browser panes, built on SwiftTerm and WKWebView.
+The code editor with terminal, browser, split panes and sensible notifications for building web applications.
 
 [**Download for macOS**](https://github.com/neerajsingh0101/neetly/releases/latest/download/neetly-macos.dmg)
 
