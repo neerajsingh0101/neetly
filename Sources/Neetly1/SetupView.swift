@@ -250,7 +250,7 @@ struct WorkspaceNameScreen: View {
             VStack(alignment: .leading, spacing: 8) {
                 Text("Workspace Name")
                     .font(.system(size: 22, weight: .semibold))
-                TextField("Feature name or GitHub issue number", text: $workspaceName)
+                TextField("", text: $workspaceName)
                     .textFieldStyle(.roundedBorder)
                     .font(.system(size: 19))
                     .focused($isNameFocused)
@@ -258,7 +258,7 @@ struct WorkspaceNameScreen: View {
                         let name = workspaceName.isEmpty ? "default" : workspaceName
                         onStart(name, layoutText, autoReload)
                     }
-                Text("A workspace name could be the feature name or the bug you are working on.")
+                Text("A workspace name could be the feature name or the GitHub issue number you are working on.")
                     .font(.system(size: 16))
                     .foregroundColor(.secondary)
             }
@@ -272,10 +272,12 @@ struct WorkspaceNameScreen: View {
                     .font(.system(size: 16))
                     .foregroundColor(.secondary)
             }
+            .padding(.top, 12)
 
             VStack(alignment: .leading, spacing: 6) {
                 Text("Layout")
                     .font(.system(size: 18, weight: .semibold))
+                    .padding(.top, 8)
                 TextEditor(text: $layoutText)
                     .font(.system(size: 15, design: .monospaced))
                     .frame(minHeight: 100)
