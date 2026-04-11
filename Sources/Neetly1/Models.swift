@@ -42,10 +42,12 @@ struct RepoConfig: Codable, Identifiable {
 struct SocketCommand: Codable {
     let action: String
     let paneId: String?
+    let paneSeq: Int?
     let url: String?
     let command: String?
     let tabId: String?
     let text: String?
+    let background: Bool?
 }
 
 /// Info about a single tab, returned by tabs.list

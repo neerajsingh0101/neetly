@@ -73,11 +73,15 @@ class PaneViewController: NSViewController {
         selectTab(at: tabs.count - 1)
     }
 
-    func addBrowserTab(url: String) {
+    func addBrowserTab(url: String, background: Bool = false) {
         let vc = BrowserTabViewController(url: url)
         addChild(vc)
         tabs.append((kind: .browser, viewController: vc))
-        selectTab(at: tabs.count - 1)
+        if background {
+            refreshTabBar()
+        } else {
+            selectTab(at: tabs.count - 1)
+        }
     }
 
     func selectTab(at index: Int) {

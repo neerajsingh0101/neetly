@@ -51,20 +51,15 @@ class WorkspaceWindowController: NSWindowController {
         switch command.action {
         case "browser.open":
             guard let url = command.url else { return nil }
-            let paneId = command.paneId ?? ""
-            if let pane = splitTree.pane(for: paneId) {
-                pane.addBrowserTab(url: url)
-            } else if let firstPane = splitTree.paneControllers.values.first {
-                firstPane.addBrowserTab(url: url)
-            }
+            let bg = command.background ?? false
+            let pane = resolvePane(command)
+            pane?.addBrowserTab(url: url, background: bg)
             return nil
 
         case "terminal.run":
             guard let cmd = command.command else { return nil }
-            let paneId = command.paneId ?? ""
-            if let pane = splitTree.pane(for: paneId) {
-                pane.addTerminalTab(command: cmd)
-            }
+            let pane = resolvePane(command)
+            pane?.addTerminalTab(command: cmd)
             return nil
 
         case "tabs.list":
@@ -89,6 +84,24 @@ class WorkspaceWindowController: NSWindowController {
             NSLog("Unknown socket command: \(command.action)")
             return nil
         }
+    }
+
+    /// Resolve a pane from command: try paneSeq first, then paneId, then fallback to first pane.
+    private func resolvePane(_ command: SocketCommand) -> PaneViewController? {
+        // By sequential number (--pane 3)
+        if let seq = command.paneSeq {
+            if let pane = splitTree.paneControllers.values.first(where: { $0.seqId == seq }) {
+                return pane
+            }
+        }
+        // By UUID / prefix
+        if let paneId = command.paneId, !paneId.isEmpty {
+            if let pane = splitTree.pane(for: paneId) {
+                return pane
+            }
+        }
+        // Fallback
+        return splitTree.paneControllers.values.first
     }
 
     private func jsonResponse(_ dict: [String: Any]) -> Data? {

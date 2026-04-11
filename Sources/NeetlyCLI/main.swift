@@ -47,13 +47,28 @@ case "send":
         .replacingOccurrences(of: "\\t", with: "\t")
     expectResponse = true
 
-case "visit":
-    guard args.count >= 3 else {
-        fputs("Usage: neetly visit <url>\n", stderr)
+case "browser":
+    guard args.count >= 4, args[2] == "open" else {
+        fputs("Usage: neetly browser open <url> [--pane N] [--background]\n", stderr)
         exit(1)
     }
     payload["action"] = "browser.open"
-    payload["url"] = args[2...].joined(separator: " ")
+    let parsed = parseFlags(Array(args[3...]))
+    payload["url"] = parsed.positional
+    if let pane = parsed.flags["pane"] { payload["paneSeq"] = Int(pane) ?? 0 }
+    if parsed.boolFlags.contains("background") { payload["background"] = true }
+
+case "visit":
+    // Short alias for: browser open
+    guard args.count >= 3 else {
+        fputs("Usage: neetly visit <url> [--pane N] [--background]\n", stderr)
+        exit(1)
+    }
+    payload["action"] = "browser.open"
+    let parsed = parseFlags(Array(args[2...]))
+    payload["url"] = parsed.positional
+    if let pane = parsed.flags["pane"] { payload["paneSeq"] = Int(pane) ?? 0 }
+    if parsed.boolFlags.contains("background") { payload["background"] = true }
 
 case "run":
     guard args.count >= 3 else {
@@ -109,10 +124,36 @@ default:
 func printUsage() {
     fputs("Usage: neetly <command> [args]\n\n", stderr)
     fputs("Commands:\n", stderr)
-    fputs("  tabs                     List all tabs\n", stderr)
-    fputs("  send <tab#> <text>       Send text to a terminal tab (e.g. neetly send 1 \"ls\\n\")\n", stderr)
-    fputs("  visit <url>              Open a browser tab\n", stderr)
-    fputs("  run <command>            Open a terminal tab\n", stderr)
+    fputs("  tabs                                   List all tabs\n", stderr)
+    fputs("  send <tab#> <text>                     Send text to a terminal tab\n", stderr)
+    fputs("  browser open <url> [--pane N] [--background]  Open a browser tab\n", stderr)
+    fputs("  visit <url> [--pane N] [--background]  Alias for browser open\n", stderr)
+    fputs("  run <command>                          Open a terminal tab\n", stderr)
+}
+
+/// Parse positional args and --flags from an argument list.
+func parseFlags(_ args: [String]) -> (positional: String, flags: [String: String], boolFlags: Set<String>) {
+    var positional: [String] = []
+    var flags: [String: String] = [:]
+    var boolFlags: Set<String> = []
+    var i = 0
+    while i < args.count {
+        let arg = args[i]
+        if arg.hasPrefix("--") {
+            let name = String(arg.dropFirst(2))
+            if i + 1 < args.count && !args[i + 1].hasPrefix("--") {
+                flags[name] = args[i + 1]
+                i += 2
+            } else {
+                boolFlags.insert(name)
+                i += 1
+            }
+        } else {
+            positional.append(arg)
+            i += 1
+        }
+    }
+    return (positional.joined(separator: " "), flags, boolFlags)
 }
 
 func printTabList(_ data: Data) {
