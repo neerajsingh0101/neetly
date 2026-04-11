@@ -2,9 +2,11 @@
 
 The code editor with terminal, browser, split panes and sensible notifications for building web applications.
 
-<a href="https://github.com/neerajsingh0101/neetly/releases/latest/download/neetly-macos.dmg">
-  <img src="https://img.shields.io/badge/Download_for_macOS-black?style=for-the-badge&logo=apple&logoColor=white" alt="Download neetly for macOS" />
-</a>
+<p align="center">
+  <a href="https://github.com/neerajsingh0101/neetly/releases/latest/download/neetly-macos.dmg">
+    <img src="./docs/assets/macos-badge.png" alt="Download neetly for macOS" width="180" />
+  </a>
+</p>
 
 ## Install
 
