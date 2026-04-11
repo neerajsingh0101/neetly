@@ -34,6 +34,22 @@ class SplitTreeController: NSViewController {
             pane.addBrowserTab(url: url)
             return pane.view
 
+        case .tabs(let children):
+            let pane = makePaneController()
+            for child in children {
+                switch child {
+                case .run(let command):
+                    pane.addTerminalTab(command: command)
+                case .visit(let url):
+                    pane.addBrowserTab(url: url)
+                default:
+                    break
+                }
+            }
+            // Select the first tab
+            if !children.isEmpty { pane.selectTab(at: 0) }
+            return pane.view
+
         case .split(let direction, let first, let second):
             let splitView = NSSplitView()
             splitView.isVertical = (direction == .columns)

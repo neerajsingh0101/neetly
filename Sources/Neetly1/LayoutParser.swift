@@ -65,6 +65,21 @@ class LayoutParser {
             guard let second = parseNode() else { return nil }
             return .split(direction: direction, first: first, second: second)
 
+        case "tabs":
+            index += 1
+            var children: [LayoutNode] = []
+            while index < lines.count {
+                let next = lines[index]
+                if next.key == "run" || next.key == "visit" {
+                    if let node = parseNode() {
+                        children.append(node)
+                    }
+                } else {
+                    break
+                }
+            }
+            return children.isEmpty ? nil : .tabs(children)
+
         default:
             // Unknown key (possibly a label we missed) — skip it
             index += 1

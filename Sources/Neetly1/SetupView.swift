@@ -38,9 +38,9 @@ struct SetupView: View {
         case .workspaceName(let repo):
             WorkspaceNameScreen(
                 repo: repo,
-                onStart: { workspaceName, autoReload in
+                onStart: { workspaceName, layoutText, autoReload in
                     let parser = LayoutParser()
-                    let dedented = dedent(repo.layoutText)
+                    let dedented = dedent(layoutText)
                     guard let layout = parser.parse(dedented) else { return }
                     let config = WorkspaceConfig(
                         repoPath: repo.path,
@@ -134,7 +134,7 @@ struct RepoListScreen: View {
                 }
             }
         }
-        .frame(minWidth: 700, minHeight: 400)
+        .frame(minWidth: 700, minHeight: 600)
     }
 }
 
@@ -145,9 +145,11 @@ struct AddRepoScreen: View {
     @State private var layoutConfig: String = """
         split: columns
         left:
-          run: claude
+          run: claude --dangerously-skip-permissions
         right:
-          run: bin/launch
+          tabs:
+            run: bin/setup;bin/launch --neetly
+            visit: http://localhost:3000
         """
     @State private var errorMessage: String?
     var onAdd: (RepoConfig) -> Void
@@ -223,9 +225,10 @@ struct AddRepoScreen: View {
 struct WorkspaceNameScreen: View {
     let repo: RepoConfig
     @State private var workspaceName: String = ""
+    @State private var layoutText: String = ""
     @State private var autoReload: Bool = true
     @FocusState private var isNameFocused: Bool
-    var onStart: (String, Bool) -> Void
+    var onStart: (String, String, Bool) -> Void
     var onBack: () -> Void
 
     var body: some View {
@@ -253,14 +256,12 @@ struct WorkspaceNameScreen: View {
                     .focused($isNameFocused)
                     .onSubmit {
                         let name = workspaceName.isEmpty ? "default" : workspaceName
-                        onStart(name, autoReload)
+                        onStart(name, layoutText, autoReload)
                     }
                 Text("A workspace name could be the feature name or the bug you are working on.")
                     .font(.system(size: 16))
                     .foregroundColor(.secondary)
             }
-
-            Spacer()
 
             VStack(alignment: .leading, spacing: 6) {
                 Toggle(isOn: $autoReload) {
@@ -272,13 +273,22 @@ struct WorkspaceNameScreen: View {
                     .foregroundColor(.secondary)
             }
 
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Layout")
+                    .font(.system(size: 18, weight: .semibold))
+                TextEditor(text: $layoutText)
+                    .font(.system(size: 15, design: .monospaced))
+                    .frame(minHeight: 100)
+                    .border(Color.gray.opacity(0.3))
+            }
+
             Spacer()
 
             HStack {
                 Spacer()
                 Button("Start") {
                     let name = workspaceName.isEmpty ? "default" : workspaceName
-                    onStart(name, autoReload)
+                    onStart(name, layoutText, autoReload)
                 }
                 .keyboardShortcut(.return)
                 .buttonStyle(.borderedProminent)
@@ -287,7 +297,10 @@ struct WorkspaceNameScreen: View {
             .padding(.bottom, 8)
         }
         .padding(24)
-        .frame(minWidth: 500, minHeight: 350)
-        .onAppear { isNameFocused = true }
+        .frame(minWidth: 600, minHeight: 500)
+        .onAppear {
+            isNameFocused = true
+            layoutText = repo.layoutText
+        }
     }
 }
