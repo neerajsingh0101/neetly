@@ -1,12 +1,22 @@
 # neetly
 
-The code editor with terminal, browser, split panes and sensible notifications for building web applications.
+The code editor with terminal, browser, split panes and sensible notifications for building web applications with agents.
 
 <p align="center">
   <a href="https://github.com/neerajsingh0101/neetly/releases/latest/download/neetly-macos.dmg">
     <img src="./docs/assets/macos-badge.png" alt="Download neetly for macOS" width="180" />
   </a>
 </p>
+
+# Automatic notifications with Claude Code
+
+Execute the following command to do one-time setup. It adds hooks to `~/.claude/settings.json` so that neetly
+is notified when Claude is done processing and is waiting. When Claude is done then the workspace tab turns "green". 
+If Claude is waiting for permission then the workspace tab turns "red". Clicking a colored workspace tab also clears the color.
+
+```bash
+neetly notify_neetly_of_claude_events
+```
 
 ## Install
 
@@ -112,21 +122,6 @@ neetly notify              # green (task done)
 neetly notify red          # red (needs permission)
 neetly notify clear        # reset to normal
 ```
-
-#### Automatic notifications with Claude Code
-
-One-time setup — adds hooks to `~/.claude/settings.json`:
-
-```bash
-neetly notify_neetly_of_claude_events
-```
-
-This wires up:
-- **Stop** (Claude finished) → tab turns green
-- **permission_prompt** (Claude needs approval) → tab turns red
-- **UserPromptSubmit** (you start typing) → tab resets
-
-Clicking a colored workspace tab also clears the color.
 
 ## Keyboard Shortcuts
 
