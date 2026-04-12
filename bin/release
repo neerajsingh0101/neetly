@@ -25,8 +25,9 @@ bash scripts/build-dmg.sh "$NEW_VERSION"
 if [ -x "$SPARKLE_BIN/sign_update" ]; then
     echo ""
     echo "==> Signing DMG with Sparkle EdDSA key..."
-    SIGNATURE=$("$SPARKLE_BIN/sign_update" neetly-macos.dmg)
-    echo "$SIGNATURE"
+    # -p prints just the signature attribute (without length which we already have)
+    SIGNATURE=$("$SPARKLE_BIN/sign_update" -p neetly-macos.dmg)
+    echo "sparkle:edSignature=\"$SIGNATURE\""
 else
     echo "==> WARNING: sign_update not found at $SPARKLE_BIN/sign_update"
     SIGNATURE=""
@@ -57,7 +58,7 @@ cat > appcast.xml << APPCAST
                 url="$DOWNLOAD_URL"
                 length="$DMG_SIZE"
                 type="application/octet-stream"
-                $SIGNATURE
+                sparkle:edSignature="$SIGNATURE"
             />
         </item>
     </channel>
