@@ -2,28 +2,74 @@
 set -euo pipefail
 
 REPO="neerajsingh0101/neetly"
+SPARKLE_BIN=".sparkle-tools/bin"
 
 # Get the latest release tag and bump the patch version
 LATEST=$(gh release list --repo "$REPO" --limit 1 --json tagName --jq '.[0].tagName' 2>/dev/null || echo "v0.0.0")
 echo "Current version: $LATEST"
 
-# Parse version numbers
 VERSION="${LATEST#v}"
 IFS='.' read -r MAJOR MINOR PATCH <<< "$VERSION"
 PATCH=$((PATCH + 1))
-NEW_TAG="v${MAJOR}.${MINOR}.${PATCH}"
+NEW_VERSION="${MAJOR}.${MINOR}.${PATCH}"
+NEW_TAG="v${NEW_VERSION}"
 
 echo "New version: $NEW_TAG"
 
-# Build DMG
+# Build DMG with version embedded in Info.plist
 echo ""
 echo "==> Building release..."
-bash scripts/build-dmg.sh
+bash scripts/build-dmg.sh "$NEW_VERSION"
 
-# Create GitHub release
+# Sign the DMG using Sparkle's sign_update
+if [ -x "$SPARKLE_BIN/sign_update" ]; then
+    echo ""
+    echo "==> Signing DMG with Sparkle EdDSA key..."
+    SIGNATURE=$("$SPARKLE_BIN/sign_update" neetly-macos.dmg)
+    echo "$SIGNATURE"
+else
+    echo "==> WARNING: sign_update not found at $SPARKLE_BIN/sign_update"
+    SIGNATURE=""
+fi
+
+# Generate appcast.xml
+echo ""
+echo "==> Generating appcast.xml..."
+DMG_SIZE=$(stat -f%z neetly-macos.dmg)
+PUB_DATE=$(date -R)
+DOWNLOAD_URL="https://github.com/$REPO/releases/download/$NEW_TAG/neetly-macos.dmg"
+
+cat > appcast.xml << APPCAST
+<?xml version="1.0" standalone="yes"?>
+<rss xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" version="2.0">
+    <channel>
+        <title>neetly</title>
+        <link>https://github.com/$REPO</link>
+        <description>neetly updates</description>
+        <language>en</language>
+        <item>
+            <title>Version $NEW_VERSION</title>
+            <pubDate>$PUB_DATE</pubDate>
+            <sparkle:version>$NEW_VERSION</sparkle:version>
+            <sparkle:shortVersionString>$NEW_VERSION</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+            <enclosure
+                url="$DOWNLOAD_URL"
+                length="$DMG_SIZE"
+                type="application/octet-stream"
+                $SIGNATURE
+            />
+        </item>
+    </channel>
+</rss>
+APPCAST
+
+echo "appcast.xml created"
+
+# Create GitHub release with DMG + appcast
 echo ""
 echo "==> Creating GitHub release $NEW_TAG..."
-gh release create "$NEW_TAG" neetly-macos.dmg \
+gh release create "$NEW_TAG" neetly-macos.dmg appcast.xml \
     --repo "$REPO" \
     --title "neetly $NEW_TAG" \
     --notes "Release $NEW_TAG" \

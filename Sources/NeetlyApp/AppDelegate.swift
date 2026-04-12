@@ -73,6 +73,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let appMenu = NSMenu()
         appMenu.addItem(withTitle: "About neetly", action: #selector(NSApplication.orderFrontStandardAboutPanel(_:)), keyEquivalent: "")
         appMenu.addItem(.separator())
+        let checkItem = NSMenuItem(
+            title: "Check for Updates...",
+            action: #selector(Updater.checkForUpdates(_:)),
+            keyEquivalent: ""
+        )
+        checkItem.target = Updater.shared
+        appMenu.addItem(checkItem)
+        appMenu.addItem(.separator())
         appMenu.addItem(withTitle: "Quit neetly", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         appMenuItem.submenu = appMenu
         mainMenu.addItem(appMenuItem)
