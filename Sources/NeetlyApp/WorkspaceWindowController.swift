@@ -8,6 +8,8 @@ class Workspace {
     var fileWatcher: FileWatcher?
     /// Status color for the workspace tab. nil = default, green = done, etc.
     var statusColor: NSColor?
+    /// Resolved GitHub PR info. nil = no PR found or not yet fetched.
+    var prInfo: GitHubPRInfo?
     var onStatusChanged: (() -> Void)?
 
     init(config: WorkspaceConfig) {
@@ -46,6 +48,14 @@ class Workspace {
         }
     }
 
+    func refreshPRStatus() {
+        GitHubPRResolver.resolve(worktreePath: config.repoPath) { [weak self] info in
+            guard let self = self else { return }
+            self.prInfo = info
+            self.onStatusChanged?()
+        }
+    }
+
     func stop() {
         fileWatcher?.stop()
         socketServer.stop()
@@ -72,14 +82,14 @@ class WorkspaceTabBar: NSView {
         plusButton.font = .systemFont(ofSize: 14, weight: .medium)
         plusButton.target = self
         plusButton.action = #selector(plusClicked)
-        plusButton.frame = NSRect(x: 0, y: 3, width: 28, height: 24)
+        plusButton.frame = NSRect(x: 0, y: 18, width: 28, height: 24)
         addSubview(plusButton)
     }
 
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError() }
 
-    func update(workspaces: [(repoName: String, workspaceName: String, isActive: Bool, statusColor: NSColor?)]) {
+    func update(workspaces: [(repoName: String, workspaceName: String, isActive: Bool, statusColor: NSColor?, prInfo: GitHubPRInfo?)]) {
         tabViews.forEach { $0.removeFromSuperview() }
         tabViews.removeAll()
 
@@ -89,7 +99,7 @@ class WorkspaceTabBar: NSView {
         for (i, ws) in workspaces.enumerated() {
             let tab = WorkspaceTab(
                 index: i, repoName: ws.repoName, workspaceName: ws.workspaceName, isActive: ws.isActive,
-                statusColor: ws.statusColor,
+                statusColor: ws.statusColor, prInfo: ws.prInfo,
                 onSelect: { [weak self] idx in self?.onSelectWorkspace?(idx) },
                 onClose: { [weak self] idx in self?.onCloseWorkspace?(idx) }
             )
@@ -100,7 +110,7 @@ class WorkspaceTabBar: NSView {
         }
 
         plusButton.frame.origin.x = x
-        plusButton.frame.origin.y = 9
+        plusButton.frame.origin.y = 18
         addSubview(plusButton)
     }
 
@@ -121,9 +131,11 @@ private class WorkspaceTab: NSView {
     private let onClose: (Int) -> Void
     private let closeBtn: NSButton
     private var trackingArea: NSTrackingArea?
+    private var prURL: URL?
+    private var prBtnFrame: NSRect = .zero
 
     init(index: Int, repoName: String, workspaceName: String, isActive: Bool,
-         statusColor: NSColor?,
+         statusColor: NSColor?, prInfo: GitHubPRInfo?,
          onSelect: @escaping (Int) -> Void, onClose: @escaping (Int) -> Void) {
         self.index = index
         self.onSelect = onSelect
@@ -131,7 +143,7 @@ private class WorkspaceTab: NSView {
         self.closeBtn = NSButton(frame: NSRect(x: 0, y: 10, width: 18, height: 18))
         super.init(frame: .zero)
         wantsLayer = true
-        layer?.cornerRadius = 4
+        layer?.cornerRadius = 6
 
         if let color = statusColor {
             layer?.backgroundColor = color.withAlphaComponent(0.45).cgColor
@@ -141,20 +153,60 @@ private class WorkspaceTab: NSView {
             layer?.backgroundColor = NSColor.clear.cgColor
         }
 
-        // Repo name (top line, smaller, secondary color)
+        let hasPR = prInfo != nil
+
+        // -- Line 1: Repo name (top, small, secondary) --
         let repoLabel = NSTextField(labelWithString: repoName)
         repoLabel.font = .systemFont(ofSize: 10)
         repoLabel.textColor = .secondaryLabelColor
         repoLabel.lineBreakMode = .byTruncatingTail
-        repoLabel.frame = NSRect(x: 8, y: 20, width: 120, height: 14)
+        repoLabel.frame = NSRect(x: 8, y: hasPR ? 38 : 30, width: 140, height: 14)
         addSubview(repoLabel)
 
-        // Workspace name (bottom line, bolder)
+        // -- Line 2: Workspace name (middle, larger) --
         let wsLabel = NSTextField(labelWithString: workspaceName)
-        wsLabel.font = .systemFont(ofSize: 12, weight: isActive ? .semibold : .regular)
+        wsLabel.font = .systemFont(ofSize: 14, weight: isActive ? .semibold : .regular)
         wsLabel.lineBreakMode = .byTruncatingTail
-        wsLabel.frame = NSRect(x: 8, y: 4, width: 120, height: 16)
+        wsLabel.frame = NSRect(x: 8, y: hasPR ? 22 : 12, width: 140, height: 17)
         addSubview(wsLabel)
+
+        // -- Line 3: PR badge pill (bottom, clickable) --
+        var prPillWidth: CGFloat = 0
+        if let pr = prInfo {
+            self.prURL = URL(string: pr.url)
+            let prColor = Self.color(for: pr.state)
+            let stateText = Self.stateLabel(for: pr.state)
+
+            let prAttr = NSMutableAttributedString()
+            prAttr.append(NSAttributedString(string: " \u{25CF} ", attributes: [
+                .font: NSFont.systemFont(ofSize: 7),
+                .foregroundColor: prColor,
+                .baselineOffset: 1.5,
+            ]))
+            prAttr.append(NSAttributedString(string: "\(stateText) #\(pr.number) \u{2197} ", attributes: [
+                .font: NSFont.monospacedDigitSystemFont(ofSize: 10, weight: .medium),
+                .foregroundColor: prColor,
+            ]))
+
+            let prBtn = NSButton(frame: .zero)
+            prBtn.wantsLayer = true
+            prBtn.layer?.cornerRadius = 4
+            prBtn.layer?.backgroundColor = prColor.withAlphaComponent(0.10).cgColor
+            prBtn.isBordered = false
+            prBtn.attributedTitle = prAttr
+            prBtn.target = self
+            prBtn.action = #selector(openPR)
+            prBtn.toolTip = Self.tooltip(for: pr)
+            prBtn.sizeToFit()
+            prBtn.frame = NSRect(
+                x: 6, y: 4,
+                width: prBtn.intrinsicContentSize.width,
+                height: 15
+            )
+            addSubview(prBtn)
+            prBtnFrame = prBtn.frame
+            prPillWidth = prBtn.frame.width + 4
+        }
 
         closeBtn.image = NSImage(systemSymbolName: "xmark", accessibilityDescription: "Close workspace")
         closeBtn.imagePosition = .imageOnly
@@ -163,14 +215,54 @@ private class WorkspaceTab: NSView {
         closeBtn.action = #selector(closeClicked)
         closeBtn.imageScaling = .scaleProportionallyDown
         closeBtn.isHidden = true
+        closeBtn.frame = NSRect(x: 0, y: hasPR ? 26 : 16, width: 18, height: 18)
         addSubview(closeBtn)
 
-        let textWidth = max(repoLabel.intrinsicContentSize.width, wsLabel.intrinsicContentSize.width)
-        let width = min(textWidth + 38, 180)
-        frame.size = NSSize(width: width, height: 38)
+        let textWidth = max(
+            repoLabel.intrinsicContentSize.width,
+            wsLabel.intrinsicContentSize.width,
+            prPillWidth
+        )
+        let width = min(textWidth + 38, 240)
+        frame.size = NSSize(width: width, height: hasPR ? 56 : 52)
         repoLabel.frame.size.width = width - 34
         wsLabel.frame.size.width = width - 34
         closeBtn.frame.origin.x = width - 22
+    }
+
+    @objc private func openPR() {
+        if let url = prURL {
+            NSWorkspace.shared.open(url)
+        }
+    }
+
+    override func resetCursorRects() {
+        super.resetCursorRects()
+        if prURL != nil && !prBtnFrame.isEmpty {
+            addCursorRect(prBtnFrame, cursor: .pointingHand)
+        }
+    }
+
+    private static func color(for state: PRState) -> NSColor {
+        switch state {
+        case .open:   return .systemGreen
+        case .draft:  return .systemGray
+        case .merged: return .systemPurple
+        case .closed: return .systemRed
+        }
+    }
+
+    private static func stateLabel(for state: PRState) -> String {
+        switch state {
+        case .open:   return "Open"
+        case .draft:  return "Draft"
+        case .merged: return "Merged"
+        case .closed: return "Closed"
+        }
+    }
+
+    private static func tooltip(for pr: GitHubPRInfo) -> String {
+        return "#\(pr.number) \(pr.title)"
     }
 
     @available(*, unavailable)
@@ -203,6 +295,7 @@ class WorkspaceWindowController: NSWindowController {
     private var activeIndex: Int = -1
     private let workspaceTabBar = WorkspaceTabBar(frame: .zero)
     private let contentArea = NSView()
+    private var prRefreshTimer: Timer?
     var onNewWorkspace: (() -> Void)?
 
     init() {
@@ -238,7 +331,7 @@ class WorkspaceWindowController: NSWindowController {
             workspaceTabBar.topAnchor.constraint(equalTo: contentView.topAnchor),
             workspaceTabBar.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
             workspaceTabBar.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
-            workspaceTabBar.heightAnchor.constraint(equalToConstant: 42),
+            workspaceTabBar.heightAnchor.constraint(equalToConstant: 60),
 
             contentArea.topAnchor.constraint(equalTo: workspaceTabBar.bottomAnchor),
             contentArea.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
@@ -258,6 +351,22 @@ class WorkspaceWindowController: NSWindowController {
         }
         workspaces.append(ws)
         selectWorkspace(at: workspaces.count - 1)
+
+        // Fetch PR status immediately
+        ws.refreshPRStatus()
+
+        // Start periodic PR refresh if not already running
+        if prRefreshTimer == nil {
+            prRefreshTimer = Timer.scheduledTimer(withTimeInterval: 30, repeats: true) { [weak self] _ in
+                self?.refreshAllPRStatuses()
+            }
+        }
+    }
+
+    private func refreshAllPRStatuses() {
+        for ws in workspaces {
+            ws.refreshPRStatus()
+        }
     }
 
     private func selectWorkspace(at index: Int) {
@@ -292,6 +401,8 @@ class WorkspaceWindowController: NSWindowController {
         if workspaces.isEmpty {
             activeIndex = -1
             window?.title = "neetly"
+            prRefreshTimer?.invalidate()
+            prRefreshTimer = nil
             onNewWorkspace?()
         } else {
             activeIndex = min(activeIndex, workspaces.count - 1)
@@ -301,7 +412,7 @@ class WorkspaceWindowController: NSWindowController {
 
     private func refreshTabBar() {
         let tabs = workspaces.enumerated().map { (i, ws) in
-            (repoName: ws.config.repoName, workspaceName: ws.config.workspaceName, isActive: i == activeIndex, statusColor: ws.statusColor)
+            (repoName: ws.config.repoName, workspaceName: ws.config.workspaceName, isActive: i == activeIndex, statusColor: ws.statusColor, prInfo: ws.prInfo)
         }
         workspaceTabBar.update(workspaces: tabs)
     }
