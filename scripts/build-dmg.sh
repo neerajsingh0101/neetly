@@ -1,24 +1,37 @@
 #!/bin/bash
 set -euo pipefail
 
+VERSION="${1:-1.0.0}"
+
 echo "==> Building release..."
 swift build -c release
 
 BUILD_DIR=".build/arm64-apple-macosx/release"
 APP_DIR=".build/neetly.app"
 DMG_NAME="neetly-macos.dmg"
+FRAMEWORKS_DIR="$APP_DIR/Contents/Frameworks"
+SPARKLE_FRAMEWORK=$(find .build -name "Sparkle.framework" -type d 2>/dev/null | head -1)
 
 echo "==> Creating .app bundle..."
 rm -rf "$APP_DIR"
 mkdir -p "$APP_DIR/Contents/MacOS"
 mkdir -p "$APP_DIR/Contents/Resources"
+mkdir -p "$FRAMEWORKS_DIR"
 
 # Copy binaries
 cp "$BUILD_DIR/neetly-app" "$APP_DIR/Contents/MacOS/neetly-app"
 cp "$BUILD_DIR/neetly" "$APP_DIR/Contents/MacOS/neetly"
 
+# Copy Sparkle framework if found
+if [ -n "$SPARKLE_FRAMEWORK" ] && [ -d "$SPARKLE_FRAMEWORK" ]; then
+    echo "==> Copying Sparkle.framework from $SPARKLE_FRAMEWORK"
+    cp -R "$SPARKLE_FRAMEWORK" "$FRAMEWORKS_DIR/"
+else
+    echo "==> WARNING: Sparkle.framework not found"
+fi
+
 # Create Info.plist
-cat > "$APP_DIR/Contents/Info.plist" << 'PLIST'
+cat > "$APP_DIR/Contents/Info.plist" << PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -32,9 +45,9 @@ cat > "$APP_DIR/Contents/Info.plist" << 'PLIST'
     <key>CFBundleDisplayName</key>
     <string>neetly</string>
     <key>CFBundleVersion</key>
-    <string>1.0.0</string>
+    <string>${VERSION}</string>
     <key>CFBundleShortVersionString</key>
-    <string>1.0.0</string>
+    <string>${VERSION}</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>LSMinimumSystemVersion</key>
@@ -42,6 +55,12 @@ cat > "$APP_DIR/Contents/Info.plist" << 'PLIST'
     <key>NSHighResolutionCapable</key>
     <true/>
     <key>NSSupportsAutomaticGraphicsSwitching</key>
+    <true/>
+    <key>SUFeedURL</key>
+    <string>https://github.com/neerajsingh0101/neetly/releases/latest/download/appcast.xml</string>
+    <key>SUPublicEDKey</key>
+    <string>L0ljaNTkCDOrcaLiMg8NIPHt+XLj5dr+Fp4dZ9AmsR8=</string>
+    <key>SUEnableAutomaticChecks</key>
     <true/>
 </dict>
 </plist>
@@ -55,6 +74,3 @@ hdiutil create -volname "neetly" \
     "$DMG_NAME"
 
 echo "==> Done: $DMG_NAME"
-echo ""
-echo "To create a GitHub release:"
-echo "  gh release create v1.0.0 $DMG_NAME --title 'neetly v1.0.0' --notes 'Initial release'"

@@ -341,6 +341,12 @@ class WorkspaceWindowController: NSWindowController {
     }
 
     func addWorkspace(config: WorkspaceConfig) {
+        // If this workspace is already open, just switch to it
+        if let existing = workspaces.firstIndex(where: { $0.config.repoPath == config.repoPath }) {
+            selectWorkspace(at: existing)
+            return
+        }
+
         let ws = Workspace(config: config)
         ws.onStatusChanged = { [weak self] in
             self?.refreshTabBar()
@@ -351,6 +357,15 @@ class WorkspaceWindowController: NSWindowController {
         }
         workspaces.append(ws)
         selectWorkspace(at: workspaces.count - 1)
+
+        // Persist to workspace store
+        WorkspaceStore.shared.add(SavedWorkspace(
+            repoPath: config.repoPath,
+            repoName: config.repoName,
+            workspaceName: config.workspaceName,
+            layoutText: config.layoutText,
+            autoReloadOnFileChange: config.autoReloadOnFileChange
+        ))
 
         // Fetch PR status immediately
         ws.refreshPRStatus()
@@ -384,12 +399,24 @@ class WorkspaceWindowController: NSWindowController {
         ws.splitTree.view.autoresizingMask = [.width, .height]
         contentArea.addSubview(ws.splitTree.view)
 
-        window?.title = "neetly -\(ws.config.workspaceName)"
+        window?.title = "neetly - \(ws.config.repoName) - \(ws.config.workspaceName)"
         refreshTabBar()
+    }
+
+    /// Close any workspace whose repoPath (worktree path) matches.
+    /// Called when a worktree is deleted from the setup screen.
+    func closeWorkspaceByPath(_ path: String) {
+        if let index = workspaces.firstIndex(where: { $0.config.repoPath == path }) {
+            closeWorkspace(at: index)
+        }
     }
 
     private func closeWorkspace(at index: Int) {
         guard index >= 0 && index < workspaces.count else { return }
+
+        // Remove from workspace store
+        let cfg = workspaces[index].config
+        WorkspaceStore.shared.remove(repoPath: cfg.repoPath, workspaceName: cfg.workspaceName)
 
         if index == activeIndex {
             workspaces[index].splitTree.view.removeFromSuperview()

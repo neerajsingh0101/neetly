@@ -37,6 +37,17 @@ swift run neetly-app
 
 On first launch, add a repo and configure its default layout. Repos are persisted at `~/.config/neetly/repos.json`.
 
+## Tech Stack
+
+<p>
+ <a href="https://www.swift.org/"><img src="https://img.shields.io/badge/Swift-F05138?logo=swift&logoColor=white" alt="Swift"></a>
+ <a href="https://developer.apple.com/xcode/swiftui/"><img src="https://img.shields.io/badge/SwiftUI-0071E3?logo=swift&logoColor=white" alt="SwiftUI"></a>
+ <a href="https://developer.apple.com/documentation/appkit"><img src="https://img.shields.io/badge/AppKit-333333?logo=apple&logoColor=white" alt="AppKit"></a>
+ <a href="https://github.com/migueldeicaza/SwiftTerm"><img src="https://img.shields.io/badge/SwiftTerm-191970?logo=terminal&logoColor=white" alt="SwiftTerm"></a>
+ <a href="https://developer.apple.com/documentation/webkit/wkwebview"><img src="https://img.shields.io/badge/WKWebView-006AFF?logo=safari&logoColor=white" alt="WKWebView"></a>
+ <a href="https://developer.apple.com/swift/"><img src="https://img.shields.io/badge/Swift_Package_Manager-F05138?logo=swift&logoColor=white" alt="SPM"></a>
+</p>
+
 ## Layout Config
 
 Declarative pane layout using `split`, `tabs`, `run`, and `visit`:
@@ -129,6 +140,7 @@ neetly notify clear        # reset to normal
 | Cmd+R | Reload browser |
 | Cmd+Shift+] | Next tab |
 | Cmd+Shift+[ | Previous tab |
+| Cmd+Click | Open a URL displayed in the terminal |
 
 ## Taxonomy
 
@@ -138,21 +150,38 @@ Workspace (named after your feature/bug, multiple per window)
     Tab (terminal or browser — multiple per pane, one visible at a time)
 ```
 
-## Tech Stack
+## Terminal Appearance
 
-<p>
- <a href="https://www.swift.org/"><img src="https://img.shields.io/badge/Swift-F05138?logo=swift&logoColor=white" alt="Swift"></a>
- <a href="https://developer.apple.com/xcode/swiftui/"><img src="https://img.shields.io/badge/SwiftUI-0071E3?logo=swift&logoColor=white" alt="SwiftUI"></a>
- <a href="https://developer.apple.com/documentation/appkit"><img src="https://img.shields.io/badge/AppKit-333333?logo=apple&logoColor=white" alt="AppKit"></a>
- <a href="https://github.com/migueldeicaza/SwiftTerm"><img src="https://img.shields.io/badge/SwiftTerm-191970?logo=terminal&logoColor=white" alt="SwiftTerm"></a>
- <a href="https://developer.apple.com/documentation/webkit/wkwebview"><img src="https://img.shields.io/badge/WKWebView-006AFF?logo=safari&logoColor=white" alt="WKWebView"></a>
- <a href="https://developer.apple.com/swift/"><img src="https://img.shields.io/badge/Swift_Package_Manager-F05138?logo=swift&logoColor=white" alt="SPM"></a>
-</p>
+Customize the terminal font, size, and colors by creating `~/.config/neetly/terminal.json`:
+
+```json
+{
+  "fontFamily": "JetBrains Mono",
+  "fontSize": 17,
+  "backgroundColor": "#1e1f2e",
+  "foregroundColor": "#cdd8f4",
+  "selectionColor": "#635b70"
+}
+```
+
+| Field | Description | Default |
+|---|---|---|
+| `fontFamily` | Any font installed on your system. Falls back to Symbols Nerd Font Mono, Noto Color Emoji, then system monospace. | `JetBrains Mono` |
+| `fontSize` | Point size. | `17` |
+| `backgroundColor` | Hex color (`#RRGGBB`). | `#1e1f2e` (Catppuccin base) |
+| `foregroundColor` | Hex color (`#RRGGBB`). | `#cdd8f4` (Catppuccin text) |
+| `selectionColor` | Background color for selected text. | `#635b70` |
+
+All fields are optional — omit any to use the default. The config is read when each terminal tab is created, so restart neetly to pick up changes.
 
 ## Architecture
 
-- **Terminal**: [SwiftTerm](https://github.com/migueldeicaza/SwiftTerm) (upgrade path to libghostty for GPU rendering)
-- **Browser**: WKWebView (native macOS WebKit, zero dependencies)
+- **Terminal**: [SwiftTerm](https://github.com/migueldeicaza/SwiftTerm) (pure Swift, CPU-rendered). In the future, we could swap it for [libghostty](https://github.com/ghostty-org/ghostty) (Ghostty's Zig-based engine with Metal GPU rendering) for better performance on 4K displays and large scrollback workloads. It's a "someday maybe" note, not anything planned.
+- **Browser**: [WKWebView](https://developer.apple.com/documentation/webkit/wkwebview) is Apple's native web view — the same WebKit engine that powers Safari. It's built into macOS, so neetly ships with zero browser dependencies and no extra download (unlike Electron or CEF which bundle a full Chromium). Every browser tab in neetly is a `WKWebView` embedded directly in the window.
 - **IPC**: Unix domain socket at `/tmp/neetly-<pid>.sock`
-- **Persistence**: `~/.config/neetly/repos.json`
-- **File watcher**: Polls for frontend file changes, auto-reloads browser tabs
+- **Persistence**:
+  - `~/.config/neetly/repos.json` — list of added repos and their default layouts
+  - `~/.config/neetly/workspaces.json` — open workspaces, restored on relaunch
+  - `~/.config/neetly/terminal.json` — terminal font and color overrides
+  - `~/neetly/<repo-name>/<workspace-name>` — git worktrees are created here, one per workspace
+- **File watcher**: WKWebView (WebKit) does not support HMR (Hot Module Replacement) the way Chrome's DevTools protocol does, so neetly polls the repo every 2 seconds for changes to JavaScript/React/CSS files and triggers a browser reload when anything changes.

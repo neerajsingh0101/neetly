@@ -6,7 +6,38 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         setupMainMenu()
-        showSetupWindow()
+
+        let saved = WorkspaceStore.shared.load()
+        if saved.isEmpty {
+            showSetupWindow()
+        } else {
+            restoreWorkspaces(saved)
+        }
+    }
+
+    private func restoreWorkspaces(_ saved: [SavedWorkspace]) {
+        let parser = LayoutParser()
+        for ws in saved {
+            let dedented = dedent(ws.layoutText)
+            guard let layout = parser.parse(dedented) else { continue }
+            let config = WorkspaceConfig(
+                repoPath: ws.repoPath,
+                repoName: ws.repoName,
+                workspaceName: ws.workspaceName,
+                layout: layout,
+                layoutText: ws.layoutText,
+                autoReloadOnFileChange: ws.autoReloadOnFileChange
+            )
+            launchWorkspace(config)
+        }
+    }
+
+    private func dedent(_ text: String) -> String {
+        let lines = text.components(separatedBy: .newlines)
+        let nonEmpty = lines.filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
+        let minIndent = nonEmpty.map { $0.prefix(while: { $0 == " " || $0 == "\t" }).count }.min() ?? 0
+        return lines.map { $0.count >= minIndent ? String($0.dropFirst(minIndent)) : $0 }
+            .joined(separator: "\n")
     }
 
     private func showSetupWindow() {
@@ -40,7 +71,17 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // App menu
         let appMenuItem = NSMenuItem()
         let appMenu = NSMenu()
-        appMenu.addItem(withTitle: "About neetly", action: #selector(NSApplication.orderFrontStandardAboutPanel(_:)), keyEquivalent: "")
+        let aboutItem = NSMenuItem(title: "About neetly", action: #selector(showAbout), keyEquivalent: "")
+        aboutItem.target = self
+        appMenu.addItem(aboutItem)
+        appMenu.addItem(.separator())
+        let checkItem = NSMenuItem(
+            title: "Check for Updates...",
+            action: #selector(Updater.checkForUpdates(_:)),
+            keyEquivalent: ""
+        )
+        checkItem.target = Updater.shared
+        appMenu.addItem(checkItem)
         appMenu.addItem(.separator())
         appMenu.addItem(withTitle: "Quit neetly", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         appMenuItem.submenu = appMenu
@@ -74,6 +115,21 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         mainMenu.addItem(paneMenuItem)
 
         NSApp.mainMenu = mainMenu
+    }
+
+    @objc private func showAbout() {
+        let version = (Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String) ?? "dev"
+        let options: [NSApplication.AboutPanelOptionKey: Any] = [
+            .applicationName: "neetly",
+            .applicationVersion: version,
+            .version: "",
+            .credits: NSAttributedString(
+                string: "A code editor with terminal, browser, split panes, and sensible notifications for building web applications with agents.",
+                attributes: [.foregroundColor: NSColor.labelColor]
+            ),
+        ]
+        NSApp.activate(ignoringOtherApps: true)
+        NSApp.orderFrontStandardAboutPanel(options: options)
     }
 
     @objc private func clearTerminal() {
