@@ -15,6 +15,8 @@ class PaneViewController: NSViewController {
     var onSplit: ((SplitDirection) -> Void)?
     /// Called when the last tab is closed. SplitTreeController collapses the pane.
     var onEmpty: (() -> Void)?
+    /// Called when user clicks maximize/restore. SplitTreeController handles it.
+    var onToggleMaximize: (() -> Void)?
 
     /// Environment dict with this pane's own ID baked in
     var socketEnvironment: [String: String] {
@@ -53,6 +55,9 @@ class PaneViewController: NSViewController {
         tabBar.onSplitRows = { [weak self] in
             self?.onSplit?(.rows)
         }
+        tabBar.onToggleMaximize = { [weak self] in
+            self?.onToggleMaximize?()
+        }
         container.addSubview(tabBar)
 
         contentView.translatesAutoresizingMaskIntoConstraints = false
@@ -74,6 +79,11 @@ class PaneViewController: NSViewController {
     }
 
     // MARK: - Tab Management
+
+    /// Called by SplitTreeController to update the maximize button icon.
+    func setMaximizedState(_ isMaximized: Bool) {
+        tabBar.setMaximized(isMaximized)
+    }
 
     func addTerminalTab(command: String) {
         let vc = TerminalTabViewController(

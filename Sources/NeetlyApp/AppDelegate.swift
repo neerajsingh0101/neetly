@@ -106,6 +106,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         paneMenu.addItem(withTitle: "Close Tab", action: #selector(closeCurrentTab), keyEquivalent: "w")
         paneMenu.addItem(withTitle: "Reload Browser", action: #selector(reloadBrowser), keyEquivalent: "r")
         paneMenu.addItem(withTitle: "Clear Terminal", action: #selector(clearTerminal), keyEquivalent: "k")
+        paneMenu.addItem(withTitle: "Maximize / Restore", action: #selector(toggleMaximize), keyEquivalent: "m")
+        paneMenu.items.last?.keyEquivalentModifierMask = [.command, .shift]
         paneMenu.addItem(.separator())
         paneMenu.addItem(withTitle: "Next Tab", action: #selector(nextTab), keyEquivalent: "]")
         paneMenu.items.last?.keyEquivalentModifierMask = [.command, .shift]
@@ -130,6 +132,15 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         ]
         NSApp.activate(ignoringOtherApps: true)
         NSApp.orderFrontStandardAboutPanel(options: options)
+    }
+
+    @objc private func toggleMaximize() {
+        guard let splitTree = workspaceWindowController?.getSplitTree() else { return }
+        if splitTree.isMaximized {
+            splitTree.toggleMaximizeForActivePane()
+        } else if let pane = findFocusedPane() {
+            splitTree.toggleMaximize(pane)
+        }
     }
 
     @objc private func clearTerminal() {

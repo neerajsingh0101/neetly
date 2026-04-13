@@ -8,6 +8,16 @@ class SplitTreeController: NSViewController {
     /// All pane controllers keyed by pane UUID, for socket command routing.
     private(set) var paneControllers: [UUID: PaneViewController] = [:]
 
+    /// State for a maximized pane. Used to restore it on unmaximize.
+    private struct MaximizedState {
+        let pane: PaneViewController
+        let placeholder: NSView
+        let parentIsSplit: Bool
+    }
+    private var maximizedState: MaximizedState?
+
+    var isMaximized: Bool { maximizedState != nil }
+
     init(layout: LayoutNode, repoPath: String, socketServer: SocketServer) {
         self.layout = layout
         self.repoPath = repoPath
@@ -18,8 +28,17 @@ class SplitTreeController: NSViewController {
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError() }
 
+    /// The actual split tree (NSSplitView or single pane view). It sits inside `view`
+    /// so we can overlay a maximized pane on top of it without disturbing the tree.
+    private var treeRoot: NSView!
+
     override func loadView() {
-        view = buildView(from: layout)
+        let container = NSView()
+        treeRoot = buildView(from: layout)
+        treeRoot.frame = container.bounds
+        treeRoot.autoresizingMask = [.width, .height]
+        container.addSubview(treeRoot)
+        view = container
     }
 
     private func buildView(from node: LayoutNode) -> NSView {
@@ -85,6 +104,10 @@ class SplitTreeController: NSViewController {
         pane.onEmpty = { [weak self, weak pane] in
             guard let self, let pane else { return }
             self.collapsePane(pane)
+        }
+        pane.onToggleMaximize = { [weak self, weak pane] in
+            guard let self, let pane else { return }
+            self.toggleMaximize(pane)
         }
         return pane
     }
@@ -159,5 +182,87 @@ class SplitTreeController: NSViewController {
     func pane(for id: String) -> PaneViewController? {
         guard let uuid = UUID(uuidString: id) else { return nil }
         return paneControllers[uuid]
+    }
+
+    // MARK: - Maximize / Restore
+
+    func toggleMaximize(_ pane: PaneViewController) {
+        if let state = maximizedState {
+            // Already maximized — unmaximize (regardless of which pane is clicked)
+            unmaximize(state)
+        } else {
+            maximize(pane)
+        }
+    }
+
+    /// Maximize via keyboard shortcut on the currently focused pane.
+    func toggleMaximizeForActivePane() {
+        if let state = maximizedState {
+            unmaximize(state)
+        }
+    }
+
+    private func maximize(_ pane: PaneViewController) {
+        let paneView = pane.view
+        guard let parent = paneView.superview else { return }
+
+        // If the pane is the ONLY thing in the tree (no splits), maximize is a no-op.
+        if paneView === treeRoot { return }
+
+        let parentIsSplit = parent is NSSplitView
+
+        // Create a placeholder to hold the pane's slot in the tree.
+        let placeholder = NSView(frame: paneView.frame)
+        placeholder.translatesAutoresizingMaskIntoConstraints = true
+        placeholder.autoresizingMask = [.width, .height]
+
+        if let splitParent = parent as? NSSplitView {
+            guard let idx = splitParent.arrangedSubviews.firstIndex(of: paneView) else { return }
+            splitParent.insertArrangedSubview(placeholder, at: idx)
+            paneView.removeFromSuperview()
+        } else {
+            parent.replaceSubview(paneView, with: placeholder)
+        }
+
+        // Hide the entire split tree and overlay the pane on the container using constraints.
+        treeRoot.isHidden = true
+        paneView.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(paneView)
+        NSLayoutConstraint.activate([
+            paneView.topAnchor.constraint(equalTo: view.topAnchor),
+            paneView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            paneView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            paneView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+        ])
+
+        maximizedState = MaximizedState(pane: pane, placeholder: placeholder, parentIsSplit: parentIsSplit)
+        pane.setMaximizedState(true)
+    }
+
+    private func unmaximize(_ state: MaximizedState) {
+        let paneView = state.pane.view
+        let placeholder = state.placeholder
+        guard let parent = placeholder.superview else {
+            maximizedState = nil
+            return
+        }
+
+        // Remove pane from the container overlay (also removes its constraints)
+        paneView.removeFromSuperview()
+
+        // Show the split tree again
+        treeRoot.isHidden = false
+
+        // Put the pane back where the placeholder is
+        if state.parentIsSplit, let splitParent = parent as? NSSplitView {
+            guard let idx = splitParent.arrangedSubviews.firstIndex(of: placeholder) else { return }
+            placeholder.removeFromSuperview()
+            splitParent.insertArrangedSubview(paneView, at: idx)
+        } else {
+            parent.replaceSubview(placeholder, with: paneView)
+        }
+
+        state.pane.setMaximizedState(false)
+        maximizedState = nil
     }
 }

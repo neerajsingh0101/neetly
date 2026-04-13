@@ -8,11 +8,13 @@ class TabBarView: NSView {
     var onNewBrowser: (() -> Void)?
     var onSplitColumns: (() -> Void)?
     var onSplitRows: (() -> Void)?
+    var onToggleMaximize: (() -> Void)?
     private var buttons: [NSView] = []
     private let newTerminalButton = NSButton()
     private let newBrowserButton = NSButton()
     private let splitColButton = NSButton()
     private let splitRowButton = NSButton()
+    private let maximizeButton = NSButton()
 
     override init(frame: NSRect) {
         super.init(frame: frame)
@@ -59,8 +61,23 @@ class TabBarView: NSView {
         splitRowButton.translatesAutoresizingMaskIntoConstraints = false
         addSubview(splitRowButton)
 
+        // Maximize button
+        maximizeButton.image = NSImage(systemSymbolName: "arrow.up.left.and.arrow.down.right", accessibilityDescription: "Maximize")
+        maximizeButton.toolTip = "Maximize (Cmd+Shift+M)"
+        maximizeButton.bezelStyle = .recessed
+        maximizeButton.imagePosition = .imageOnly
+        maximizeButton.target = self
+        maximizeButton.action = #selector(maximizeClicked)
+        maximizeButton.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(maximizeButton)
+
         NSLayoutConstraint.activate([
-            splitRowButton.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -4),
+            maximizeButton.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -4),
+            maximizeButton.centerYAnchor.constraint(equalTo: centerYAnchor),
+            maximizeButton.widthAnchor.constraint(equalToConstant: 28),
+            maximizeButton.heightAnchor.constraint(equalToConstant: 22),
+
+            splitRowButton.trailingAnchor.constraint(equalTo: maximizeButton.leadingAnchor, constant: -6),
             splitRowButton.centerYAnchor.constraint(equalTo: centerYAnchor),
             splitRowButton.widthAnchor.constraint(equalToConstant: 28),
             splitRowButton.heightAnchor.constraint(equalToConstant: 22),
@@ -117,6 +134,21 @@ class TabBarView: NSView {
 
     @objc private func splitRowClicked() {
         onSplitRows?()
+    }
+
+    @objc private func maximizeClicked() {
+        onToggleMaximize?()
+    }
+
+    /// Update the maximize button icon and tooltip based on state.
+    func setMaximized(_ isMaximized: Bool) {
+        if isMaximized {
+            maximizeButton.image = NSImage(systemSymbolName: "arrow.down.right.and.arrow.up.left", accessibilityDescription: "Restore")
+            maximizeButton.toolTip = "Restore (Cmd+Shift+M)"
+        } else {
+            maximizeButton.image = NSImage(systemSymbolName: "arrow.up.left.and.arrow.down.right", accessibilityDescription: "Maximize")
+            maximizeButton.toolTip = "Maximize (Cmd+Shift+M)"
+        }
     }
 
     override func draw(_ dirtyRect: NSRect) {
