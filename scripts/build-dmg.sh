@@ -26,6 +26,12 @@ cp "$BUILD_DIR/neetly" "$APP_DIR/Contents/MacOS/neetly"
 if [ -n "$SPARKLE_FRAMEWORK" ] && [ -d "$SPARKLE_FRAMEWORK" ]; then
     echo "==> Copying Sparkle.framework from $SPARKLE_FRAMEWORK"
     cp -R "$SPARKLE_FRAMEWORK" "$FRAMEWORKS_DIR/"
+
+    # SPM doesn't add the @loader_path/../Frameworks rpath automatically.
+    # The executable links @rpath/Sparkle.framework/... so we need to tell dyld
+    # to look in Contents/Frameworks/ relative to the executable.
+    echo "==> Adding @loader_path/../Frameworks rpath to executable"
+    install_name_tool -add_rpath "@loader_path/../Frameworks" "$APP_DIR/Contents/MacOS/neetly-app" 2>&1 || true
 else
     echo "==> WARNING: Sparkle.framework not found"
 fi

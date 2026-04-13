@@ -20,6 +20,8 @@ The code editor with terminal, browser, split panes and sensible notifications f
    ```
    
 3. Open neetly from Applications.
+   > macOS may block the first launch with an "unidentified developer" warning (Gatekeeper).
+   > To bypass: right-click `neetly.app` → Open → Open, or run `xattr -dr com.apple.quarantine /Applications/neetly.app` once.
 
 ### Build from source
 
