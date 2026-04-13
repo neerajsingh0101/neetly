@@ -107,3 +107,17 @@ enum PaneTabKind {
     case terminal
     case browser
 }
+
+enum PRState {
+    case open
+    case draft
+    case merged
+    case closed
+}
+
+struct GitHubPRInfo {
+    let number: Int
+    let title: String
+    let url: String
+    let state: PRState
+}
