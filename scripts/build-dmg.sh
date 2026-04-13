@@ -57,7 +57,7 @@ cat > "$APP_DIR/Contents/Info.plist" << PLIST
     <key>NSSupportsAutomaticGraphicsSwitching</key>
     <true/>
     <key>SUFeedURL</key>
-    <string>https://github.com/neerajsingh0101/neetly/releases/latest/download/appcast.xml</string>
+    <string>https://github.com/neetozone/neetly/releases/latest/download/appcast.xml</string>
     <key>SUPublicEDKey</key>
     <string>L0ljaNTkCDOrcaLiMg8NIPHt+XLj5dr+Fp4dZ9AmsR8=</string>
     <key>SUEnableAutomaticChecks</key>

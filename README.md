@@ -3,14 +3,14 @@
 The code editor with terminal, browser, split panes and sensible notifications for building web applications with agents.
 
 <p align="center">
-  <a href="https://github.com/neerajsingh0101/neetly/releases/latest/download/neetly-macos.dmg">
+  <a href="https://github.com/neetozone/neetly/releases/latest/download/neetly-macos.dmg">
     <img src="./docs/assets/macos-badge.png" alt="Download neetly for macOS" width="180" />
   </a>
 </p>
 
 ## Installation instructions
 
-1. Download [neetly-macos.dmg](https://github.com/neerajsingh0101/neetly/releases/latest/download/neetly-macos.dmg) and open the DMG and drag `neetly.app` to Applications.
+1. Download [neetly-macos.dmg](https://github.com/neetozone/neetly/releases/latest/download/neetly-macos.dmg) and open the DMG and drag `neetly.app` to Applications.
 2. Set up Claude Code notifications (one-time): Execute the following command to do a one-time setup. It adds hooks to `~/.claude/settings.json` so that neetly
    is notified when Claude is done processing and is waiting. When Claude is done, the workspace tab turns "green". 
     If Claude is waiting for permission, then the workspace tab turns "red". Clicking a colored workspace tab also clears the color.
@@ -24,7 +24,7 @@ The code editor with terminal, browser, split panes and sensible notifications f
 ### Build from source
 
 ```bash
-git clone https://github.com/neerajsingh0101/neetly.git
+git clone https://github.com/neetozone/neetly.git
 cd neetly
 swift build
 

@@ -1,7 +1,7 @@
 #!/bin/bash
 set -euo pipefail
 
-REPO="neerajsingh0101/neetly"
+REPO="neetozone/neetly"
 SPARKLE_BIN=".sparkle-tools/bin"
 
 # Get the latest release tag and bump the patch version
