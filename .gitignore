@@ -6,3 +6,4 @@ DerivedData/
 *.dmg
 appcast.xml
 .sparkle-tools/
+scripts/AppIcon.iconset/

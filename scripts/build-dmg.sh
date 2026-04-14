@@ -22,6 +22,13 @@ mkdir -p "$FRAMEWORKS_DIR"
 cp "$BUILD_DIR/neetly-app" "$APP_DIR/Contents/MacOS/neetly-app"
 cp "$BUILD_DIR/neetly" "$APP_DIR/Contents/MacOS/neetly"
 
+# Copy app icon
+if [ -f "scripts/AppIcon.icns" ]; then
+    cp "scripts/AppIcon.icns" "$APP_DIR/Contents/Resources/AppIcon.icns"
+else
+    echo "==> WARNING: scripts/AppIcon.icns not found; run scripts/build-icon.sh first"
+fi
+
 # Copy Sparkle framework if found
 if [ -n "$SPARKLE_FRAMEWORK" ] && [ -d "$SPARKLE_FRAMEWORK" ]; then
     echo "==> Copying Sparkle.framework from $SPARKLE_FRAMEWORK"
@@ -44,6 +51,8 @@ cat > "$APP_DIR/Contents/Info.plist" << PLIST
 <dict>
     <key>CFBundleExecutable</key>
     <string>neetly-app</string>
+    <key>CFBundleIconFile</key>
+    <string>AppIcon</string>
     <key>CFBundleIdentifier</key>
     <string>com.neetly.app</string>
     <key>CFBundleName</key>
