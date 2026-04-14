@@ -10,7 +10,7 @@ enum SplitDirection {
 indirect enum LayoutNode {
     case run(command: String)
     case visit(url: String)
-    case split(direction: SplitDirection, first: LayoutNode, second: LayoutNode)
+    case split(direction: SplitDirection, first: LayoutNode, second: LayoutNode, firstSize: Double?, secondSize: Double?)
     case tabs([LayoutNode])  // multiple run/visit in one pane as tabs
 }
 

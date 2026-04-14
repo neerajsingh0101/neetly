@@ -6,13 +6,15 @@ struct TerminalConfig: Codable {
     let backgroundColor: String?
     let foregroundColor: String?
     let selectionColor: String?
+    let linkColor: String?
 
     static let `default` = TerminalConfig(
         fontFamily: nil,
         fontSize: 17,
         backgroundColor: "#1e1f2e",
         foregroundColor: "#cdd8f4",
-        selectionColor: "#635b70"
+        selectionColor: "#635b70",
+        linkColor: "#8bb8fa"
     )
 
     static func load() -> TerminalConfig {
@@ -52,6 +54,24 @@ struct TerminalConfig: Codable {
 
     var selColor: NSColor? {
         selectionColor.flatMap { NSColor.fromHex($0) }
+    }
+
+    /// Returns the link color as an OSC 4 escape sequence that overrides ANSI
+    /// palette colors 4 (blue) and 12 (bright blue), where most terminals render
+    /// URLs.
+    var oscLinkColorSequence: String? {
+        guard let hex = linkColor?.trimmingCharacters(in: .whitespaces) else { return nil }
+        var str = hex
+        if str.hasPrefix("#") { str = String(str.dropFirst()) }
+        guard str.count == 6 else { return nil }
+        let r = String(str.prefix(2))
+        let g = String(str.dropFirst(2).prefix(2))
+        let b = String(str.dropFirst(4).prefix(2))
+        // OSC 4 ; index ; rgb:RR/GG/BB ST  — set palette color
+        // ESC ] 4 ; i ; rgb:... BEL
+        let blue = "\u{1B}]4;4;rgb:\(r)/\(g)/\(b)\u{07}"
+        let brightBlue = "\u{1B}]4;12;rgb:\(r)/\(g)/\(b)\u{07}"
+        return blue + brightBlue
     }
 }
 

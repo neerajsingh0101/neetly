@@ -71,6 +71,22 @@ right:
 | `tabs` | — | Multiple `run`/`visit` as tabs in one pane |
 | `run` | `<command>` | Terminal tab |
 | `visit` | `<url>` | Browser tab |
+| `size` | `35%` | Percentage of the parent split taken by this child. Optional; defaults to 50/50. |
+
+### Sizing splits
+
+By default, every split is 50/50. Add a `size` attribute to any child to change that:
+
+```yaml
+split: columns
+left:
+  size: 35%
+  run: claude --dangerously-skip-permissions
+right:
+  run: bin/setup-mise;bin/launch --neetly
+```
+
+The left pane takes 35% of the width, the right pane takes the remaining 65%. If you specify sizes on both sides and they don't add up to 100%, the first one wins and the second gets the remainder — no error. `size` can appear in any child of a `split` (left/right/top/bottom) and nests naturally.
 
 ## CLI Commands
 
@@ -162,7 +178,8 @@ Customize the terminal font, size, and colors by creating `~/.config/neetly/term
   "fontSize": 17,
   "backgroundColor": "#1e1f2e",
   "foregroundColor": "#cdd8f4",
-  "selectionColor": "#635b70"
+  "selectionColor": "#635b70",
+  "linkColor": "#8bb8fa"
 }
 ```
 
@@ -173,6 +190,7 @@ Customize the terminal font, size, and colors by creating `~/.config/neetly/term
 | `backgroundColor` | Hex color (`#RRGGBB`). | `#1e1f2e` (Catppuccin base) |
 | `foregroundColor` | Hex color (`#RRGGBB`). | `#cdd8f4` (Catppuccin text) |
 | `selectionColor` | Background color for selected text. | `#635b70` |
+| `linkColor` | Overrides ANSI palette blue (colors 4 and 12), where most terminals render URLs. | `#8bb8fa` |
 
 All fields are optional — omit any to use the default. The config is read when each terminal tab is created, so restart neetly to pick up changes.
 

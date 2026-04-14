@@ -36,7 +36,8 @@ class LayoutParser {
 
         let indent = raw.count - stripped.count
         let parts = stripped.split(separator: ":", maxSplits: 1)
-        let key = String(parts[0]).trimmingCharacters(in: .whitespaces)
+        // Keys are case-insensitive (size == Size), values preserve case.
+        let key = String(parts[0]).trimmingCharacters(in: .whitespaces).lowercased()
         let value = parts.count > 1
             ? String(parts[1]).trimmingCharacters(in: .whitespaces)
             : ""
@@ -60,10 +61,13 @@ class LayoutParser {
             let direction: SplitDirection = line.value == "columns" ? .columns : .rows
             index += 1
             skipLabel()
+            let firstSize = parseSize()
             guard let first = parseNode() else { return nil }
             skipLabel()
+            let secondSize = parseSize()
             guard let second = parseNode() else { return nil }
-            return .split(direction: direction, first: first, second: second)
+            return .split(direction: direction, first: first, second: second,
+                          firstSize: firstSize, secondSize: secondSize)
 
         case "tabs":
             index += 1
@@ -94,5 +98,18 @@ class LayoutParser {
         if ["left", "right", "top", "bottom"].contains(key) {
             index += 1
         }
+    }
+
+    /// Parse an optional `size: X%` attribute for the next node.
+    /// Returns a value in 0.0-1.0 range, or nil if no size is specified.
+    private func parseSize() -> Double? {
+        guard index < lines.count else { return nil }
+        guard lines[index].key == "size" else { return nil }
+        let raw = lines[index].value
+            .trimmingCharacters(in: .whitespaces)
+            .replacingOccurrences(of: "%", with: "")
+        index += 1
+        guard let num = Double(raw) else { return nil }
+        return num / 100.0
     }
 }

@@ -69,6 +69,13 @@ class TerminalTabViewController: NSViewController, LocalProcessTerminalViewDeleg
         terminalView.processDelegate = self
         terminalView.startProcess(executable: shell, args: ["-l"], environment: env)
 
+        // Apply custom link color (overrides ANSI palette blue) by feeding
+        // OSC 4 directly to the terminal (not via PTY).
+        let config = TerminalConfig.load()
+        if let osc = config.oscLinkColorSequence {
+            terminalView.feed(text: osc)
+        }
+
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
             guard let self else { return }
             let escapedPath = self.repoPath.replacingOccurrences(of: "'", with: "'\\''")

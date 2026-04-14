@@ -1,5 +1,24 @@
 import AppKit
 
+/// NSSplitView subclass that applies an initial divider ratio after the first
+/// layout pass (when bounds are non-zero). Without this, setting the divider
+/// position immediately after creation is a no-op because the view has zero size.
+class RatioSplitView: NSSplitView {
+    var initialRatio: CGFloat?
+    private var didApplyInitialRatio = false
+
+    override func layout() {
+        super.layout()
+        guard !didApplyInitialRatio, let ratio = initialRatio else { return }
+        let total = isVertical ? bounds.width : bounds.height
+        guard total > 0 else { return }
+        // Set the flag BEFORE calling setPosition, because setPosition triggers
+        // another layout pass which re-enters this method.
+        didApplyInitialRatio = true
+        setPosition(total * ratio, ofDividerAt: 0)
+    }
+}
+
 /// Recursively builds NSSplitView hierarchy from a LayoutNode tree.
 class SplitTreeController: NSViewController {
     let layout: LayoutNode
@@ -69,8 +88,8 @@ class SplitTreeController: NSViewController {
             if !children.isEmpty { pane.selectTab(at: 0) }
             return pane.view
 
-        case .split(let direction, let first, let second):
-            let splitView = NSSplitView()
+        case .split(let direction, let first, let second, let firstSize, let secondSize):
+            let splitView = RatioSplitView()
             splitView.isVertical = (direction == .columns)
             splitView.dividerStyle = .thin
             splitView.autoresizingMask = [.width, .height]
@@ -81,13 +100,18 @@ class SplitTreeController: NSViewController {
             splitView.addArrangedSubview(firstView)
             splitView.addArrangedSubview(secondView)
 
-            // Equal split by default
-            DispatchQueue.main.async {
-                let half = splitView.isVertical
-                    ? splitView.bounds.width / 2
-                    : splitView.bounds.height / 2
-                splitView.setPosition(half, ofDividerAt: 0)
+            // Apply size: first size wins if specified; otherwise second size
+            // determines the split; otherwise 50/50. This naturally handles
+            // the "sizes don't add to 100%" case — second gets the remainder.
+            let ratio: CGFloat
+            if let s = firstSize {
+                ratio = CGFloat(max(0.05, min(0.95, s)))
+            } else if let s = secondSize {
+                ratio = CGFloat(max(0.05, min(0.95, 1.0 - s)))
+            } else {
+                ratio = 0.5
             }
+            splitView.initialRatio = ratio
 
             return splitView
         }

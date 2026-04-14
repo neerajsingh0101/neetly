@@ -360,9 +360,10 @@ struct WorkspaceNameScreen: View {
                 if isLoading {
                     ProgressView()
                         .controlSize(.small)
+                        .tint(.green)
                     Text("Creating worktree...")
-                        .font(.system(size: 14))
-                        .foregroundColor(.secondary)
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundColor(.green)
                 } else {
                     Button("Start") { startWorkspace() }
                         .keyboardShortcut(.return)
