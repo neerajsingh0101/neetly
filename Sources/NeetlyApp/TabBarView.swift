@@ -72,30 +72,30 @@ class TabBarView: NSView {
         addSubview(maximizeButton)
 
         NSLayoutConstraint.activate([
-            maximizeButton.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -4),
+            maximizeButton.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -2),
             maximizeButton.centerYAnchor.constraint(equalTo: centerYAnchor),
-            maximizeButton.widthAnchor.constraint(equalToConstant: 28),
-            maximizeButton.heightAnchor.constraint(equalToConstant: 22),
+            maximizeButton.widthAnchor.constraint(equalToConstant: 22),
+            maximizeButton.heightAnchor.constraint(equalToConstant: 20),
 
-            splitRowButton.trailingAnchor.constraint(equalTo: maximizeButton.leadingAnchor, constant: -6),
+            splitRowButton.trailingAnchor.constraint(equalTo: maximizeButton.leadingAnchor, constant: -1),
             splitRowButton.centerYAnchor.constraint(equalTo: centerYAnchor),
-            splitRowButton.widthAnchor.constraint(equalToConstant: 28),
-            splitRowButton.heightAnchor.constraint(equalToConstant: 22),
+            splitRowButton.widthAnchor.constraint(equalToConstant: 22),
+            splitRowButton.heightAnchor.constraint(equalToConstant: 20),
 
-            splitColButton.trailingAnchor.constraint(equalTo: splitRowButton.leadingAnchor, constant: -2),
+            splitColButton.trailingAnchor.constraint(equalTo: splitRowButton.leadingAnchor, constant: -1),
             splitColButton.centerYAnchor.constraint(equalTo: centerYAnchor),
-            splitColButton.widthAnchor.constraint(equalToConstant: 28),
-            splitColButton.heightAnchor.constraint(equalToConstant: 22),
+            splitColButton.widthAnchor.constraint(equalToConstant: 22),
+            splitColButton.heightAnchor.constraint(equalToConstant: 20),
 
-            newBrowserButton.trailingAnchor.constraint(equalTo: splitColButton.leadingAnchor, constant: -6),
+            newBrowserButton.trailingAnchor.constraint(equalTo: splitColButton.leadingAnchor, constant: -1),
             newBrowserButton.centerYAnchor.constraint(equalTo: centerYAnchor),
-            newBrowserButton.widthAnchor.constraint(equalToConstant: 28),
-            newBrowserButton.heightAnchor.constraint(equalToConstant: 22),
+            newBrowserButton.widthAnchor.constraint(equalToConstant: 22),
+            newBrowserButton.heightAnchor.constraint(equalToConstant: 20),
 
-            newTerminalButton.trailingAnchor.constraint(equalTo: newBrowserButton.leadingAnchor, constant: -2),
+            newTerminalButton.trailingAnchor.constraint(equalTo: newBrowserButton.leadingAnchor, constant: -1),
             newTerminalButton.centerYAnchor.constraint(equalTo: centerYAnchor),
-            newTerminalButton.widthAnchor.constraint(equalToConstant: 32),
-            newTerminalButton.heightAnchor.constraint(equalToConstant: 22),
+            newTerminalButton.widthAnchor.constraint(equalToConstant: 26),
+            newTerminalButton.heightAnchor.constraint(equalToConstant: 20),
         ])
     }
 

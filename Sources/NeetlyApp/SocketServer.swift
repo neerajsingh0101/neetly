@@ -7,8 +7,12 @@ class SocketServer {
     var onCommand: ((SocketCommand) -> Data?)?
 
     init() {
+        // Each workspace gets a unique socket so orphaned background processes
+        // from a killed workspace can't accidentally send commands to a new
+        // workspace that happens to share the same app PID.
         let pid = ProcessInfo.processInfo.processIdentifier
-        socketPath = "/tmp/neetly-\(pid).sock"
+        let tag = UUID().uuidString.prefix(8).lowercased()
+        socketPath = "/tmp/neetly-\(pid)-\(tag).sock"
     }
 
     func start() {

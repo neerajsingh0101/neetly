@@ -3,9 +3,11 @@ import AppKit
 class AppDelegate: NSObject, NSApplicationDelegate {
     var setupWindowController: SetupWindowController?
     var workspaceWindowController: WorkspaceWindowController?
+    private var escapeMonitor: Any?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         setupMainMenu()
+        setupEscapeKeyMonitor()
 
         let saved = WorkspaceStore.shared.load()
         if saved.isEmpty {
@@ -63,6 +65,19 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         workspaceWindowController?.addWorkspace(config: config)
         NSApp.activate(ignoringOtherApps: true)
+    }
+
+    /// Install a local key-event monitor that catches Escape and exits
+    /// maximize mode if a pane is currently maximized. Escape is ignored
+    /// otherwise, so terminals still receive it for their own handling.
+    private func setupEscapeKeyMonitor() {
+        escapeMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            guard event.keyCode == 53 else { return event }  // 53 = Escape
+            guard let splitTree = self?.workspaceWindowController?.getSplitTree(),
+                  splitTree.isMaximized else { return event }
+            splitTree.toggleMaximizeForActivePane()
+            return nil  // consume the event
+        }
     }
 
     private func setupMainMenu() {
