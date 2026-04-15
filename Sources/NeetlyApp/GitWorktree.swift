@@ -41,6 +41,48 @@ class GitWorktree {
         return "\(home)/neetly/\(repoName)/\(workspaceName)"
     }
 
+    /// Returns the short commit SHA of the worktree's current HEAD, or nil.
+    static func headShortSha(worktreePath: String) -> String? {
+        guard FileManager.default.fileExists(atPath: worktreePath) else { return nil }
+        let helper = GitWorktree(repoPath: worktreePath)
+        let result = helper.shell("git rev-parse --short HEAD", in: worktreePath)
+        guard result.success else { return nil }
+        let sha = result.output.trimmingCharacters(in: .whitespacesAndNewlines)
+        return sha.isEmpty ? nil : sha
+    }
+
+    /// Returns the GitHub commit URL for the worktree's current HEAD, or nil
+    /// if the remote is not a GitHub URL.
+    static func headCommitURL(worktreePath: String) -> String? {
+        guard FileManager.default.fileExists(atPath: worktreePath) else { return nil }
+        let helper = GitWorktree(repoPath: worktreePath)
+        let shaRes = helper.shell("git rev-parse HEAD", in: worktreePath)
+        let remoteRes = helper.shell("git remote get-url origin", in: worktreePath)
+        guard shaRes.success, remoteRes.success else { return nil }
+        let sha = shaRes.output.trimmingCharacters(in: .whitespacesAndNewlines)
+        let remote = remoteRes.output.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !sha.isEmpty, !remote.isEmpty else { return nil }
+        guard let repoURL = githubRepoURL(fromRemote: remote) else { return nil }
+        return "\(repoURL)/commit/\(sha)"
+    }
+
+    /// Convert a git remote URL to a https://github.com/owner/repo URL, or nil.
+    private static func githubRepoURL(fromRemote remote: String) -> String? {
+        var path: String
+        if remote.hasPrefix("git@github.com:") {
+            path = String(remote.dropFirst("git@github.com:".count))
+        } else if remote.hasPrefix("https://github.com/") {
+            path = String(remote.dropFirst("https://github.com/".count))
+        } else if remote.hasPrefix("ssh://git@github.com/") {
+            path = String(remote.dropFirst("ssh://git@github.com/".count))
+        } else {
+            return nil
+        }
+        if path.hasSuffix(".git") { path = String(path.dropLast(4)) }
+        guard !path.isEmpty else { return nil }
+        return "https://github.com/\(path)"
+    }
+
     /// Delete a worktree: run `git worktree remove --force` from the parent repo,
     /// then `rm -rf` as a fallback if anything is left.
     static func deleteWorktree(parentRepoPath: String, repoName: String, workspaceName: String) -> Bool {
