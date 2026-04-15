@@ -6,6 +6,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var escapeMonitor: Any?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        setAppIcon()
         setupMainMenu()
         setupEscapeKeyMonitor()
 
@@ -77,6 +78,16 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                   splitTree.isMaximized else { return event }
             splitTree.toggleMaximizeForActivePane()
             return nil  // consume the event
+        }
+    }
+
+    /// Set the Dock/Cmd+Tab icon from the bundled resource. Needed for
+    /// dev runs (`swift run neetly-app`) where there's no .app bundle to
+    /// pick up CFBundleIconFile.
+    private func setAppIcon() {
+        if let url = Bundle.module.url(forResource: "AppIcon", withExtension: "icns"),
+           let image = NSImage(contentsOf: url) {
+            NSApp.applicationIconImage = image
         }
     }
 

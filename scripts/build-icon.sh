@@ -6,7 +6,7 @@ set -euo pipefail
 
 SVG="docs/assets/logo.svg"
 ICONSET="scripts/AppIcon.iconset"
-OUTPUT="scripts/AppIcon.icns"
+OUTPUT="Sources/NeetlyApp/Resources/AppIcon.icns"
 
 if [ ! -f "$SVG" ]; then
     echo "Error: $SVG not found"
@@ -44,6 +44,7 @@ for entry in "${sizes[@]}"; do
 done
 
 echo "Packaging .icns..."
+mkdir -p "$(dirname "$OUTPUT")"
 iconutil -c icns "$ICONSET" -o "$OUTPUT"
 
 echo "==> Done: $OUTPUT"

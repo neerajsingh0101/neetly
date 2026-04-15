@@ -321,6 +321,15 @@ struct WorkspaceNameScreen: View {
                     .focused($isNameFocused)
                     .onSubmit { startWorkspace() }
                     .disabled(isLoading)
+                    .onChange(of: workspaceName) { _, newValue in
+                        // Live validation: update the error as the user types.
+                        let trimmed = newValue.trimmingCharacters(in: .whitespaces)
+                        if trimmed.count > 30 {
+                            errorMessage = "Workspace name must be 30 characters or fewer (current: \(trimmed.count))."
+                        } else {
+                            errorMessage = nil
+                        }
+                    }
                 Text("A workspace name could be the feature name or the GitHub issue number you are working on.")
                     .font(.system(size: 16))
                     .foregroundColor(.secondary)

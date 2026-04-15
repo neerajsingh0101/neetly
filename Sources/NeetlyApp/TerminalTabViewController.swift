@@ -9,6 +9,9 @@ class TerminalTabViewController: NSViewController, LocalProcessTerminalViewDeleg
     let environment: [String: String]
     private var terminalView: LocalProcessTerminalView!
     private var hasStarted = false
+    private var mouseEventMonitor: Any?
+    private var autoScrollTimer: Timer?
+    private var isDragSelecting = false
     /// Called when the shell process exits (e.g. user types `exit`).
     var onProcessExited: (() -> Void)?
 
@@ -54,6 +57,84 @@ class TerminalTabViewController: NSViewController, LocalProcessTerminalViewDeleg
         if !hasStarted {
             hasStarted = true
             startProcess()
+        }
+        installMouseMonitor()
+    }
+
+    override func viewWillDisappear() {
+        super.viewWillDisappear()
+        removeMouseMonitor()
+    }
+
+    // MARK: - Auto-scroll during selection drag
+
+    /// SwiftTerm's public API doesn't let us override mouse methods, so we
+    /// install a local event monitor that tracks mouseDown/Dragged/Up on our
+    /// terminal view. While a drag is active outside the visible area, we
+    /// start a timer that scrolls up/down so the user can extend the selection
+    /// into scrollback — matches iTerm2/WezTerm behavior.
+    private func installMouseMonitor() {
+        guard mouseEventMonitor == nil else { return }
+        mouseEventMonitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .leftMouseDragged, .leftMouseUp]) { [weak self] event in
+            self?.handleMouseEvent(event)
+            return event
+        }
+    }
+
+    private func removeMouseMonitor() {
+        if let m = mouseEventMonitor {
+            NSEvent.removeMonitor(m)
+            mouseEventMonitor = nil
+        }
+        stopAutoScrollTimer()
+    }
+
+    private func handleMouseEvent(_ event: NSEvent) {
+        // Only react to events that target our terminal view
+        guard let window = terminalView?.window, event.window === window else { return }
+        let local = terminalView.convert(event.locationInWindow, from: nil)
+        let inside = terminalView.bounds.contains(local)
+
+        switch event.type {
+        case .leftMouseDown:
+            if inside {
+                isDragSelecting = true
+                startAutoScrollTimer()
+            }
+        case .leftMouseDragged:
+            // keep timer running; dragging outside bounds is what triggers scrolling
+            break
+        case .leftMouseUp:
+            isDragSelecting = false
+            stopAutoScrollTimer()
+        default:
+            break
+        }
+    }
+
+    private func startAutoScrollTimer() {
+        stopAutoScrollTimer()
+        autoScrollTimer = Timer.scheduledTimer(withTimeInterval: 0.05, repeats: true) { [weak self] _ in
+            self?.autoScrollTick()
+        }
+    }
+
+    private func stopAutoScrollTimer() {
+        autoScrollTimer?.invalidate()
+        autoScrollTimer = nil
+    }
+
+    private func autoScrollTick() {
+        guard isDragSelecting, let window = terminalView.window else { return }
+        let globalPoint = NSEvent.mouseLocation
+        let winPoint = window.convertPoint(fromScreen: globalPoint)
+        let localPoint = terminalView.convert(winPoint, from: nil)
+
+        // AppKit coordinates: y=0 at bottom, y=bounds.height at top.
+        if localPoint.y > terminalView.bounds.height {
+            terminalView.scrollUp(lines: 1)
+        } else if localPoint.y < 0 {
+            terminalView.scrollDown(lines: 1)
         }
     }
 
@@ -128,5 +209,9 @@ class TerminalTabViewController: NSViewController, LocalProcessTerminalViewDeleg
     func requestOpenLink(source: TerminalView, link: String, params: [String: String]) {
         guard let url = URL(string: link) else { return }
         NSWorkspace.shared.open(url)
+    }
+
+    deinit {
+        removeMouseMonitor()
     }
 }

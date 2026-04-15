@@ -23,10 +23,11 @@ cp "$BUILD_DIR/neetly-app" "$APP_DIR/Contents/MacOS/neetly-app"
 cp "$BUILD_DIR/neetly" "$APP_DIR/Contents/MacOS/neetly"
 
 # Copy app icon
-if [ -f "scripts/AppIcon.icns" ]; then
-    cp "scripts/AppIcon.icns" "$APP_DIR/Contents/Resources/AppIcon.icns"
+ICON_SRC="Sources/NeetlyApp/Resources/AppIcon.icns"
+if [ -f "$ICON_SRC" ]; then
+    cp "$ICON_SRC" "$APP_DIR/Contents/Resources/AppIcon.icns"
 else
-    echo "==> WARNING: scripts/AppIcon.icns not found; run scripts/build-icon.sh first"
+    echo "==> WARNING: $ICON_SRC not found; run scripts/build-icon.sh first"
 fi
 
 # Copy Sparkle framework if found

@@ -16,6 +16,9 @@ let package = Package(
                 .product(name: "Sparkle", package: "Sparkle"),
             ],
             path: "Sources/NeetlyApp",
+            resources: [
+                .copy("Resources/AppIcon.icns"),
+            ],
             linkerSettings: [
                 .linkedFramework("WebKit"),
             ]
