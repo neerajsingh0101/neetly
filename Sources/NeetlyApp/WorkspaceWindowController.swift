@@ -55,6 +55,7 @@ class Workspace {
     }
 
     func refreshPRStatus() {
+        let previousPR = prInfo
         GitHubPRResolver.resolve(worktreePath: config.repoPath) { [weak self] info in
             guard let self = self else { return }
             self.prInfo = info
@@ -63,6 +64,14 @@ class Workspace {
                 workspaceName: self.config.workspaceName,
                 prInfo: info
             )
+            // Log activity when a PR is first detected
+            if let info = info, previousPR == nil {
+                ActivityStore.shared.log(
+                    .prOpened,
+                    repoName: self.config.repoName,
+                    detail: "\(info.number)"
+                )
+            }
             self.onStatusChanged?()
         }
     }

@@ -9,6 +9,7 @@ enum SetupScreen {
     case workspaceList(RepoConfig)
     case workspaceName(RepoConfig)
     case settings
+    case activities
 }
 
 // MARK: - Root Setup View
@@ -31,7 +32,8 @@ struct SetupView: View {
                 onSelectRepo: { repo in screen = .workspaceList(repo) },
                 onAddRepo: { screen = .addRepo },
                 onEditLayout: { repo in screen = .editLayout(repo) },
-                onSettings: { screen = .settings }
+                onSettings: { screen = .settings },
+                onActivities: { screen = .activities }
             )
             .onAppear { repos = RepoStore.shared.load() }
 
@@ -95,6 +97,7 @@ struct SetupView: View {
                         layoutText: layoutText,
                         autoReloadOnFileChange: autoReload
                     )
+                    ActivityStore.shared.log(.workspaceCreated, repoName: repo.name, detail: workspaceName)
                     onLaunch(config)
                 },
                 onBack: { screen = .repoList }
@@ -102,6 +105,9 @@ struct SetupView: View {
 
         case .settings:
             SettingsScreen(onBack: { screen = .repoList })
+
+        case .activities:
+            ActivityScreen(onBack: { screen = .repoList })
         }
     }
 
@@ -122,25 +128,42 @@ struct RepoListScreen: View {
     var onAddRepo: () -> Void
     var onEditLayout: (RepoConfig) -> Void
     var onSettings: () -> Void
+    var onActivities: () -> Void
 
     var body: some View {
         VStack(spacing: 0) {
             // Header
-            HStack {
-                Text("neetly").font(.system(size: 48, weight: .bold, design: .monospaced))
-                Spacer()
-                Button(action: onSettings) {
-                    Image(systemName: "gearshape")
-                        .font(.system(size: 16))
+            VStack(alignment: .trailing, spacing: 10) {
+                HStack {
+                    Text("neetly").font(.system(size: 48, weight: .bold, design: .monospaced))
+                    Spacer()
+                    Button(action: onAddRepo) {
+                        Label("Add Repo", systemImage: "plus")
+                            .font(.system(size: 16, weight: .semibold))
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.large)
                 }
-                .buttonStyle(.plain)
-                .help("Settings")
-                Button(action: onAddRepo) {
-                    Label("Add Repo", systemImage: "plus")
-                        .font(.system(size: 16, weight: .semibold))
+                HStack(spacing: 16) {
+                    Button(action: onActivities) {
+                        HStack(spacing: 3) {
+                            Image(systemName: "list.bullet.clipboard")
+                            Text("Activities")
+                        }
+                        .font(.system(size: 13))
+                    }
+                    .buttonStyle(.plain)
+                    .help("Activities")
+                    Button(action: onSettings) {
+                        HStack(spacing: 3) {
+                            Image(systemName: "gearshape")
+                            Text("Settings")
+                        }
+                        .font(.system(size: 13))
+                    }
+                    .buttonStyle(.plain)
+                    .help("Settings")
                 }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.large)
             }
             .padding(20)
 
@@ -636,6 +659,7 @@ struct WorkspaceListScreen: View {
                 onDelete: {
                     // Optimistically remove from the visible list immediately
                     let nameToDelete = target.name
+                    ActivityStore.shared.log(.workspaceDeleted, repoName: repo.name, detail: nameToDelete)
                     workspaces.removeAll { $0.name == nameToDelete }
                     workspaceToDelete = nil
 
@@ -801,6 +825,90 @@ struct SettingsScreen: View {
             message = "Directory does not exist: \(expanded)"
             messageIsError = true
         }
+    }
+}
+
+// MARK: - Activities
+
+struct ActivityScreen: View {
+    @State private var activities: [Activity] = []
+    var onBack: () -> Void
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack {
+                Button(action: onBack) {
+                    Label("Back", systemImage: "chevron.left")
+                }
+                .buttonStyle(.plain)
+                Spacer()
+            }
+            .padding(20)
+
+            HStack {
+                Text("Activities")
+                    .font(.system(size: 29, weight: .bold))
+                Spacer()
+            }
+            .padding(.horizontal, 20)
+            .padding(.bottom, 12)
+
+            Divider()
+
+            if activities.isEmpty {
+                Spacer()
+                Text("No activities yet")
+                    .font(.system(size: 20, weight: .medium))
+                    .foregroundColor(.secondary)
+                Spacer()
+            } else {
+                List {
+                    ForEach(activities) { activity in
+                        HStack(alignment: .top, spacing: 12) {
+                            Image(systemName: activityIcon(activity.kind))
+                                .font(.system(size: 14))
+                                .foregroundColor(activityColor(activity.kind))
+                                .frame(width: 20, alignment: .center)
+                                .padding(.top, 3)
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(activity.description)
+                                    .font(.system(size: 15))
+                                Text(formatDate(activity.timestamp))
+                                    .font(.system(size: 12))
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                        .padding(.vertical, 4)
+                    }
+                }
+            }
+        }
+        .frame(minWidth: 700, minHeight: 600)
+        .onAppear {
+            activities = ActivityStore.shared.load()
+        }
+    }
+
+    private func activityIcon(_ kind: Activity.Kind) -> String {
+        switch kind {
+        case .workspaceCreated: return "plus.circle.fill"
+        case .workspaceDeleted: return "trash.circle.fill"
+        case .prOpened:         return "arrow.triangle.pull"
+        }
+    }
+
+    private func activityColor(_ kind: Activity.Kind) -> Color {
+        switch kind {
+        case .workspaceCreated: return .green
+        case .workspaceDeleted: return .red
+        case .prOpened:         return .purple
+        }
+    }
+
+    private func formatDate(_ date: Date) -> String {
+        let formatter = RelativeDateTimeFormatter()
+        formatter.unitsStyle = .full
+        return formatter.localizedString(for: date, relativeTo: Date())
     }
 }
 
