@@ -110,7 +110,10 @@ class WorkspaceTabBar: NSView {
     var onCloseWorkspace: ((Int) -> Void)?
     var onNewWorkspace: (() -> Void)?
     private var tabViews: [NSView] = []
+    private var detailViews: [NSView] = []
     private let plusButton = NSButton()
+    private static let tabRowHeight: CGFloat = 40
+    static let detailRowHeight: CGFloat = 22
 
     override init(frame: NSRect) {
         super.init(frame: frame)
@@ -123,7 +126,7 @@ class WorkspaceTabBar: NSView {
         plusButton.font = .systemFont(ofSize: 14, weight: .medium)
         plusButton.target = self
         plusButton.action = #selector(plusClicked)
-        plusButton.frame = NSRect(x: 0, y: 28, width: 28, height: 24)
+        plusButton.frame = NSRect(x: 0, y: 0, width: 28, height: 24)
         addSubview(plusButton)
     }
 
@@ -133,19 +136,29 @@ class WorkspaceTabBar: NSView {
     func update(workspaces: [(repoName: String, workspaceName: String, commitSha: String?, commitURL: String?, isActive: Bool, statusColor: NSColor?, prInfo: GitHubPRInfo?)]) {
         tabViews.forEach { $0.removeFromSuperview() }
         tabViews.removeAll()
-
+        detailViews.forEach { $0.removeFromSuperview() }
+        detailViews.removeAll()
         plusButton.removeFromSuperview()
 
+        let detailY: CGFloat = 2
+        let tabRowY: CGFloat = Self.detailRowHeight
+
+        // -- Tab row --
         var x: CGFloat = 4
         for (i, ws) in workspaces.enumerated() {
             let tab = WorkspaceTab(
                 index: i, repoName: ws.repoName, workspaceName: ws.workspaceName,
-                commitSha: ws.commitSha, commitURL: ws.commitURL, isActive: ws.isActive,
-                statusColor: ws.statusColor, prInfo: ws.prInfo,
+                isActive: ws.isActive, statusColor: ws.statusColor,
                 onSelect: { [weak self] idx in self?.onSelectWorkspace?(idx) },
                 onClose: { [weak self] idx in self?.onCloseWorkspace?(idx) }
             )
-            tab.frame.origin = CGPoint(x: x, y: 2)
+            if ws.isActive {
+                // Extend active tab down to cover the detail strip (no gap)
+                tab.frame.origin = CGPoint(x: x, y: 0)
+                tab.frame.size.height += tabRowY
+            } else {
+                tab.frame.origin = CGPoint(x: x, y: tabRowY + 2)
+            }
             addSubview(tab)
             tabViews.append(tab)
             x += tab.frame.width + 4
@@ -161,132 +174,53 @@ class WorkspaceTabBar: NSView {
             plusButton.frame.size = NSSize(width: 28, height: 24)
         }
         plusButton.frame.origin.x = x
-        plusButton.frame.origin.y = 28
+        plusButton.frame.origin.y = tabRowY + 8
         addSubview(plusButton)
-    }
 
-    @objc private func plusClicked() {
-        onNewWorkspace?()
-    }
+        // -- Detail row (full width, for active workspace's SHA + PR) --
+        guard let active = workspaces.first(where: { $0.isActive }) else { return }
 
-    override func draw(_ dirtyRect: NSRect) {
-        super.draw(dirtyRect)
-        NSColor.separatorColor.setFill()
-        NSRect(x: 0, y: 0, width: bounds.width, height: 1).fill()
-    }
-}
-
-private class WorkspaceTab: NSView {
-    let index: Int
-    private let onSelect: (Int) -> Void
-    private let onClose: (Int) -> Void
-    private let closeBtn: NSButton
-    private var trackingArea: NSTrackingArea?
-    private var prURL: URL?
-    private var prBtnFrame: NSRect = .zero
-    private var shaURL: URL?
-    private var shaBtnFrame: NSRect = .zero
-
-    init(index: Int, repoName: String, workspaceName: String,
-         commitSha: String?, commitURL: String?, isActive: Bool,
-         statusColor: NSColor?, prInfo: GitHubPRInfo?,
-         onSelect: @escaping (Int) -> Void, onClose: @escaping (Int) -> Void) {
-        self.index = index
-        self.onSelect = onSelect
-        self.onClose = onClose
-        self.closeBtn = NSButton(frame: NSRect(x: 0, y: 10, width: 18, height: 18))
-        super.init(frame: .zero)
-        wantsLayer = true
-        layer?.cornerRadius = 6
-
-        if let color = statusColor {
-            layer?.backgroundColor = color.withAlphaComponent(0.45).cgColor
-        } else if isActive {
-            layer?.backgroundColor = NSColor.controlAccentColor.withAlphaComponent(0.15).cgColor
-        } else {
-            layer?.backgroundColor = NSColor.clear.cgColor
-        }
-
-        let hasPR = prInfo != nil
-        let hasSha = commitSha != nil
-
-        // Vertical layout (AppKit y=0 is bottom). Stack from bottom up:
-        //   PR badge (if any) → workspace name → commit sha (if any) → repo name
-        var cursorY: CGFloat = 4
-        let prBtnY: CGFloat = hasPR ? cursorY : 0
-        if hasPR { cursorY += 18 }
-        let wsY: CGFloat = cursorY + (hasPR ? 0 : 8)
-        cursorY = wsY + 17
-        let shaY: CGFloat = hasSha ? cursorY : 0
-        if hasSha { cursorY += 14 }
-        let repoY: CGFloat = cursorY + 2
-        let totalHeight: CGFloat = repoY + 14 + 4
-
-        // -- Top: Repo name (small, secondary) --
-        let repoLabel = NSTextField(labelWithString: repoName)
-        repoLabel.font = .systemFont(ofSize: 10)
-        repoLabel.textColor = .secondaryLabelColor
-        repoLabel.lineBreakMode = .byTruncatingTail
-        repoLabel.frame = NSRect(x: 8, y: repoY, width: 140, height: 14)
-        addSubview(repoLabel)
-
-        // -- Commit SHA (monospace, gray) — clickable to GitHub if URL available --
-        var shaView: NSView?
-        if let sha = commitSha {
-            let shaFont = NSFont.monospacedSystemFont(ofSize: 9, weight: .regular)
-            if let urlStr = commitURL, let url = URL(string: urlStr) {
-                self.shaURL = url
+        var detailX: CGFloat = 8
+        if let sha = active.commitSha {
+            let shaFont = NSFont.monospacedSystemFont(ofSize: 10, weight: .regular)
+            if let urlStr = active.commitURL, let url = URL(string: urlStr) {
                 let attr = NSAttributedString(string: sha, attributes: [
                     .font: shaFont,
-                    .foregroundColor: NSColor.tertiaryLabelColor,
+                    // Catppuccin Mocha: Overlay0 #6c7086
+                    .foregroundColor: NSColor(red: 0x6c/255, green: 0x70/255, blue: 0x86/255, alpha: 1),
                 ])
                 let btn = NSButton(frame: .zero)
                 btn.isBordered = false
                 btn.attributedTitle = attr
                 btn.target = self
-                btn.action = #selector(openCommit)
+                btn.action = #selector(openCommitURL(_:))
                 btn.toolTip = "Open commit on GitHub"
+                btn.tag = 0  // placeholder; URL stored separately
                 btn.sizeToFit()
-                btn.frame = NSRect(
-                    x: 6, y: shaY,
-                    width: btn.intrinsicContentSize.width,
-                    height: 14
-                )
+                btn.frame = NSRect(x: detailX, y: detailY, width: btn.intrinsicContentSize.width, height: 18)
                 addSubview(btn)
-                shaBtnFrame = btn.frame
-                shaView = btn
+                detailViews.append(btn)
+                commitURL = url
+                detailX += btn.frame.width + 12
             } else {
                 let label = NSTextField(labelWithString: sha)
                 label.font = shaFont
-                label.textColor = .tertiaryLabelColor
-                label.lineBreakMode = .byTruncatingTail
-                label.frame = NSRect(x: 8, y: shaY, width: 140, height: 12)
+                // Catppuccin Mocha: Overlay0 #6c7086
+                label.textColor = NSColor(red: 0x6c/255, green: 0x70/255, blue: 0x86/255, alpha: 1)
+                label.frame = NSRect(x: detailX, y: detailY + 2, width: 80, height: 14)
+                label.sizeToFit()
                 addSubview(label)
-                shaView = label
+                detailViews.append(label)
+                detailX += label.frame.width + 12
             }
         }
 
-        // -- Workspace name (larger) --
-        let wsLabel = NSTextField(labelWithString: workspaceName)
-        wsLabel.font = .systemFont(ofSize: 14, weight: isActive ? .semibold : .regular)
-        wsLabel.lineBreakMode = .byTruncatingTail
-        wsLabel.frame = NSRect(x: 8, y: wsY, width: 140, height: 17)
-        addSubview(wsLabel)
-
-        // -- PR badge pill (bottom, clickable) --
-        var prPillWidth: CGFloat = 0
-        if let pr = prInfo {
-            self.prURL = URL(string: pr.url)
-            let prColor = Self.color(for: pr.state)
-            let stateText = Self.stateLabel(for: pr.state)
+        if let pr = active.prInfo {
+            let prColor = WorkspaceTab.color(for: pr.state)
+            let stateText = WorkspaceTab.stateLabel(for: pr.state)
 
             let prAttr = NSMutableAttributedString()
-            prAttr.append(NSAttributedString(string: " \u{25CF} ", attributes: [
-                .font: NSFont.systemFont(ofSize: 7),
-                .foregroundColor: prColor,
-                .baselineOffset: 1.5,
-            ]))
-            prAttr.append(NSAttributedString(string: "\(stateText) #\(pr.number) \u{2197} ", attributes: [
+            prAttr.append(NSAttributedString(string: " PR #\(pr.number) (\(stateText)) \u{2197} ", attributes: [
                 .font: NSFont.monospacedDigitSystemFont(ofSize: 10, weight: .medium),
                 .foregroundColor: prColor,
             ]))
@@ -298,68 +232,121 @@ private class WorkspaceTab: NSView {
             prBtn.isBordered = false
             prBtn.attributedTitle = prAttr
             prBtn.target = self
-            prBtn.action = #selector(openPR)
-            prBtn.toolTip = Self.tooltip(for: pr)
+            prBtn.action = #selector(openPRURL(_:))
+            prBtn.toolTip = "#\(pr.number) \(pr.title)"
             prBtn.sizeToFit()
-            prBtn.frame = NSRect(
-                x: 6, y: prBtnY,
-                width: prBtn.intrinsicContentSize.width,
-                height: 15
-            )
+            prBtn.frame = NSRect(x: detailX, y: detailY, width: prBtn.intrinsicContentSize.width, height: 16)
             addSubview(prBtn)
-            prBtnFrame = prBtn.frame
-            prPillWidth = prBtn.frame.width + 4
+            detailViews.append(prBtn)
+            prInfoURL = URL(string: pr.url)
+        }
+    }
+
+    private var commitURL: URL?
+    private var prInfoURL: URL?
+
+    @objc private func openCommitURL(_ sender: Any?) {
+        if let url = commitURL { NSWorkspace.shared.open(url) }
+    }
+
+    @objc private func openPRURL(_ sender: Any?) {
+        if let url = prInfoURL { NSWorkspace.shared.open(url) }
+    }
+
+    @objc private func plusClicked() {
+        onNewWorkspace?()
+    }
+
+    static let activeTabColor = NSColor(red: 30/255, green: 30/255, blue: 46/255, alpha: 1.0)
+
+    override func draw(_ dirtyRect: NSRect) {
+        super.draw(dirtyRect)
+        // Detail row background — same color as active tab
+        Self.activeTabColor.setFill()
+        NSRect(x: 0, y: 1, width: bounds.width, height: Self.detailRowHeight - 1).fill()
+        // Bottom border
+        NSColor.separatorColor.setFill()
+        NSRect(x: 0, y: 0, width: bounds.width, height: 1).fill()
+    }
+}
+
+private class WorkspaceTab: NSView {
+    let index: Int
+    private let onSelect: (Int) -> Void
+    private let onClose: (Int) -> Void
+    private let closeBtn: NSButton
+    private var trackingArea: NSTrackingArea?
+
+    init(index: Int, repoName: String, workspaceName: String,
+         isActive: Bool, statusColor: NSColor?,
+         onSelect: @escaping (Int) -> Void, onClose: @escaping (Int) -> Void) {
+        self.index = index
+        self.onSelect = onSelect
+        self.onClose = onClose
+        self.closeBtn = NSButton(frame: NSRect(x: 0, y: 10, width: 18, height: 18))
+        super.init(frame: .zero)
+        wantsLayer = true
+
+        if let color = statusColor {
+            layer?.cornerRadius = 6
+            layer?.backgroundColor = color.withAlphaComponent(0.45).cgColor
+        } else if isActive {
+            // Round only top corners so tab blends into the detail strip below
+            layer?.cornerRadius = 6
+            layer?.maskedCorners = [.layerMinXMaxYCorner, .layerMaxXMaxYCorner]
+            layer?.backgroundColor = WorkspaceTabBar.activeTabColor.cgColor
+        } else {
+            layer?.cornerRadius = 6
+            layer?.backgroundColor = NSColor.clear.cgColor
         }
 
-        closeBtn.image = NSImage(systemSymbolName: "xmark", accessibilityDescription: "Close workspace")
+        // Two-line layout: repo name (top) + workspace name (bottom)
+        // Active tabs are extended downward; offset content so it stays in the top portion
+        let totalHeight: CGFloat = 38
+        let contentBase: CGFloat = isActive ? WorkspaceTabBar.detailRowHeight : 0
+        let repoY: CGFloat = contentBase + 20
+        let wsY: CGFloat = contentBase + 4
+
+        let repoLabel = NSTextField(labelWithString: repoName)
+        repoLabel.font = .systemFont(ofSize: 10)
+        // Catppuccin Mocha: Subtext0 #a6adc8
+        repoLabel.textColor = isActive ? NSColor(red: 0xa6/255, green: 0xad/255, blue: 0xc8/255, alpha: 1) : .secondaryLabelColor
+        repoLabel.lineBreakMode = .byTruncatingTail
+        repoLabel.frame = NSRect(x: 8, y: repoY, width: 140, height: 14)
+        addSubview(repoLabel)
+
+        let wsLabel = NSTextField(labelWithString: workspaceName)
+        wsLabel.font = .systemFont(ofSize: 14, weight: isActive ? .semibold : .regular)
+        // Catppuccin Mocha: Text #cdd6f4
+        wsLabel.textColor = isActive ? NSColor(red: 0xcd/255, green: 0xd6/255, blue: 0xf4/255, alpha: 1) : .labelColor
+        wsLabel.lineBreakMode = .byTruncatingTail
+        wsLabel.frame = NSRect(x: 8, y: wsY, width: 140, height: 17)
+        addSubview(wsLabel)
+
+        closeBtn.image = NSImage(systemSymbolName: "xmark", accessibilityDescription: "Detach workspace")
         closeBtn.imagePosition = .imageOnly
         closeBtn.isBordered = false
+        closeBtn.contentTintColor = isActive ? NSColor(red: 0xa6/255, green: 0xad/255, blue: 0xc8/255, alpha: 1) : .secondaryLabelColor
         closeBtn.target = self
         closeBtn.action = #selector(closeClicked)
         closeBtn.imageScaling = .scaleProportionallyDown
         closeBtn.isHidden = true
-        closeBtn.toolTip = "Close Workspace"
-        // Vertically center the close button relative to the tab
-        closeBtn.frame = NSRect(x: 0, y: (totalHeight - 18) / 2, width: 18, height: 18)
+        closeBtn.toolTip = "Detach Workspace"
+        closeBtn.frame = NSRect(x: 0, y: contentBase + (totalHeight - 18) / 2, width: 18, height: 18)
         addSubview(closeBtn)
 
         let textWidth = max(
             repoLabel.intrinsicContentSize.width,
-            (shaView?.intrinsicContentSize.width ?? 0),
-            wsLabel.intrinsicContentSize.width,
-            prPillWidth
+            wsLabel.intrinsicContentSize.width
         )
-        let width = min(textWidth + 38, 240)
+        let width = min(textWidth + 38, 200)
         frame.size = NSSize(width: width, height: totalHeight)
         repoLabel.frame.size.width = width - 34
-        if let lbl = shaView as? NSTextField { lbl.frame.size.width = width - 34 }
         wsLabel.frame.size.width = width - 34
         closeBtn.frame.origin.x = width - 22
     }
 
-    @objc private func openPR() {
-        if let url = prURL {
-            NSWorkspace.shared.open(url)
-        }
-    }
-
-    @objc private func openCommit() {
-        if let url = shaURL {
-            NSWorkspace.shared.open(url)
-        }
-    }
-
-    override func resetCursorRects() {
-        super.resetCursorRects()
-        if prURL != nil && !prBtnFrame.isEmpty {
-            addCursorRect(prBtnFrame, cursor: .pointingHand)
-        }
-        if shaURL != nil && !shaBtnFrame.isEmpty {
-            addCursorRect(shaBtnFrame, cursor: .pointingHand)
-        }
-    }
-
-    private static func color(for state: PRState) -> NSColor {
+    static func color(for state: PRState) -> NSColor {
         switch state {
         case .open:   return .systemGreen
         case .draft:  return .systemGray
@@ -368,17 +355,13 @@ private class WorkspaceTab: NSView {
         }
     }
 
-    private static func stateLabel(for state: PRState) -> String {
+    static func stateLabel(for state: PRState) -> String {
         switch state {
         case .open:   return "Open"
         case .draft:  return "Draft"
         case .merged: return "Merged"
         case .closed: return "Closed"
         }
-    }
-
-    private static func tooltip(for pr: GitHubPRInfo) -> String {
-        return "#\(pr.number) \(pr.title)"
     }
 
     @available(*, unavailable)
@@ -447,7 +430,7 @@ class WorkspaceWindowController: NSWindowController {
             workspaceTabBar.topAnchor.constraint(equalTo: contentView.topAnchor),
             workspaceTabBar.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
             workspaceTabBar.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
-            workspaceTabBar.heightAnchor.constraint(equalToConstant: 80),
+            workspaceTabBar.heightAnchor.constraint(equalToConstant: 64),
 
             contentArea.topAnchor.constraint(equalTo: workspaceTabBar.bottomAnchor),
             contentArea.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
