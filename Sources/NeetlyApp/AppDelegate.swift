@@ -195,8 +195,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // Find the last pane (rightmost/bottommost) by seqId
         guard let pane = splitTree.paneControllers.values.max(by: { $0.seqId < $1.seqId }) else { return }
 
-        // Add a lazygit terminal tab and select it
-        pane.addTerminalTab(command: "lazygit")
+        // Add a terminal tab with the configured diff command
+        pane.addTerminalTab(command: NeetlySettings.shared.diffCommand)
 
         // Maximize the pane after a short delay to let the tab initialize
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {

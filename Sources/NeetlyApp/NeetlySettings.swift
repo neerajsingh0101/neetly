@@ -14,6 +14,7 @@ class NeetlySettings {
 
     private struct Settings: Codable {
         var worktreeBaseDir: String
+        var diffCommand: String?
     }
 
     static var defaultWorktreeBaseDir: String {
@@ -27,6 +28,18 @@ class NeetlySettings {
     func setWorktreeBaseDir(_ path: String) {
         var s = load()
         s.worktreeBaseDir = path
+        save(s)
+    }
+
+    static let defaultDiffCommand = "lazygit"
+
+    var diffCommand: String {
+        load().diffCommand ?? Self.defaultDiffCommand
+    }
+
+    func setDiffCommand(_ command: String) {
+        var s = load()
+        s.diffCommand = command
         save(s)
     }
 

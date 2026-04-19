@@ -730,6 +730,7 @@ struct DeleteWorktreeSheet: View {
 
 struct SettingsScreen: View {
     @State private var worktreeDir: String = NeetlySettings.shared.worktreeBaseDir
+    @State private var diffCommand: String = NeetlySettings.shared.diffCommand
     @State private var message: String?
     @State private var messageIsError: Bool = false
     var onBack: () -> Void
@@ -752,42 +753,83 @@ struct SettingsScreen: View {
 
             Divider()
 
-            VStack(alignment: .leading, spacing: 16) {
-                Text("Settings")
-                    .font(.system(size: 22, weight: .semibold))
-                    .padding(.top, 20)
+            ScrollView {
+                VStack(alignment: .leading, spacing: 24) {
+                    Text("Settings")
+                        .font(.system(size: 22, weight: .semibold))
+                        .padding(.top, 20)
 
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Worktree Directory")
-                        .font(.system(size: 16, weight: .medium))
-                    Text("The directory where neetly creates git worktrees for your workspaces.")
-                        .font(.system(size: 13))
-                        .foregroundColor(.secondary)
-                    HStack {
-                        TextField("", text: $worktreeDir)
+                    // Worktree directory
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Worktree Directory")
+                            .font(.system(size: 16, weight: .medium))
+                        Text("The directory where neetly creates git worktrees for your workspaces.")
+                            .font(.system(size: 13))
+                            .foregroundColor(.secondary)
+                        HStack {
+                            TextField("", text: $worktreeDir)
+                                .textFieldStyle(.roundedBorder)
+                                .font(.system(size: 15, design: .monospaced))
+                            Button("Browse...") { pickDirectory() }
+                        }
+                    }
+
+                    Divider()
+
+                    // Cmd+D: Open Diff
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack(spacing: 6) {
+                            Text("Open Diff")
+                                .font(.system(size: 16, weight: .medium))
+                            Text("Cmd+D")
+                                .font(.system(size: 11, weight: .medium, design: .monospaced))
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(Color.secondary.opacity(0.2))
+                                .cornerRadius(4)
+                        }
+                        Text("Opens a terminal in the last pane with this command and maximizes it.")
+                            .font(.system(size: 13))
+                            .foregroundColor(.secondary)
+                        TextField("", text: $diffCommand)
                             .textFieldStyle(.roundedBorder)
                             .font(.system(size: 15, design: .monospaced))
-                        Button("Browse...") { pickDirectory() }
+                    }
+
+                    // Cmd+Z: Close Diff (read-only)
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack(spacing: 6) {
+                            Text("Close Diff")
+                                .font(.system(size: 16, weight: .medium))
+                            Text("Cmd+Z")
+                                .font(.system(size: 11, weight: .medium, design: .monospaced))
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(Color.secondary.opacity(0.2))
+                                .cornerRadius(4)
+                        }
+                        Text("Unmaximizes the pane and closes the active tab. This is not configurable.")
+                            .font(.system(size: 13))
+                            .foregroundColor(.secondary)
+                    }
+
+                    if let msg = message {
+                        Text(msg)
+                            .font(.system(size: 13))
+                            .foregroundColor(messageIsError ? .red : .green)
+                    }
+
+                    HStack {
+                        Spacer()
+                        Button("Save") { save() }
+                            .keyboardShortcut(.return)
+                            .buttonStyle(.borderedProminent)
+                            .controlSize(.large)
                     }
                 }
-
-                if let msg = message {
-                    Text(msg)
-                        .font(.system(size: 13))
-                        .foregroundColor(messageIsError ? .red : .green)
-                }
-
-                HStack {
-                    Spacer()
-                    Button("Save") { save() }
-                        .keyboardShortcut(.return)
-                        .buttonStyle(.borderedProminent)
-                        .controlSize(.large)
-                }
+                .padding(.horizontal, 20)
+                .padding(.bottom, 20)
             }
-            .padding(.horizontal, 20)
-
-            Spacer()
         }
         .frame(minWidth: 700, minHeight: 600)
     }
@@ -812,13 +854,16 @@ struct SettingsScreen: View {
             return
         }
 
-        // Expand ~ if typed manually
         let expanded = NSString(string: path).expandingTildeInPath
 
         var isDir: ObjCBool = false
         if FileManager.default.fileExists(atPath: expanded, isDirectory: &isDir), isDir.boolValue {
             worktreeDir = expanded
             NeetlySettings.shared.setWorktreeBaseDir(expanded)
+
+            let cmd = diffCommand.trimmingCharacters(in: .whitespaces)
+            NeetlySettings.shared.setDiffCommand(cmd.isEmpty ? NeetlySettings.defaultDiffCommand : cmd)
+
             message = "Settings saved."
             messageIsError = false
         } else {
