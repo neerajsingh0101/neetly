@@ -212,6 +212,8 @@ All fields are optional — omit any to use the default. The config is read when
 
 ### What is WKWebView
 
+Please see [this](https://github.com/neetozone/neetly/blob/main/docs/wkwebview.md).
+
 ### Why you are not using Google Chrome
 
 Google chrome would be nice but that is a much more heavy lift. I noticed that
