@@ -119,7 +119,7 @@ class WorkspaceTabBar: NSView {
     private var detailViews: [NSView] = []
     private let plusButton = NSButton()
     private static let tabRowHeight: CGFloat = 40
-    static let detailRowHeight: CGFloat = 22
+    static let detailRowHeight: CGFloat = 33
 
     override init(frame: NSRect) {
         super.init(frame: frame)
@@ -146,7 +146,6 @@ class WorkspaceTabBar: NSView {
         detailViews.removeAll()
         plusButton.removeFromSuperview()
 
-        let detailY: CGFloat = 2
         let tabRowY: CGFloat = Self.detailRowHeight
 
         // -- Tab row --
@@ -158,13 +157,7 @@ class WorkspaceTabBar: NSView {
                 onSelect: { [weak self] idx in self?.onSelectWorkspace?(idx) },
                 onClose: { [weak self] idx in self?.onCloseWorkspace?(idx) }
             )
-            if ws.isActive {
-                // Extend active tab down to cover the detail strip (no gap)
-                tab.frame.origin = CGPoint(x: x, y: 0)
-                tab.frame.size.height += tabRowY
-            } else {
-                tab.frame.origin = CGPoint(x: x, y: tabRowY + 2)
-            }
+            tab.frame.origin = CGPoint(x: x, y: tabRowY + 2)
             addSubview(tab)
             tabViews.append(tab)
             x += tab.frame.width + 4
@@ -186,12 +179,16 @@ class WorkspaceTabBar: NSView {
         // -- Detail row (full width, for active workspace's SHA + PR) --
         guard let active = workspaces.first(where: { $0.isActive }) else { return }
 
+        let detailFont = NSFont.monospacedSystemFont(ofSize: 14, weight: .regular)
+        let detailBoldFont = NSFont.monospacedDigitSystemFont(ofSize: 14, weight: .medium)
+        let itemHeight: CGFloat = 20
+        let centerY: CGFloat = (Self.detailRowHeight - itemHeight) / 2
+
         var detailX: CGFloat = 8
         if let sha = active.commitSha {
-            let shaFont = NSFont.monospacedSystemFont(ofSize: 10, weight: .regular)
             if let urlStr = active.commitURL, let url = URL(string: urlStr) {
                 let attr = NSAttributedString(string: sha, attributes: [
-                    .font: shaFont,
+                    .font: detailFont,
                     // Catppuccin Mocha: Overlay0 #6c7086
                     .foregroundColor: NSColor(red: 0x6c/255, green: 0x70/255, blue: 0x86/255, alpha: 1),
                 ])
@@ -201,20 +198,20 @@ class WorkspaceTabBar: NSView {
                 btn.target = self
                 btn.action = #selector(openCommitURL(_:))
                 btn.toolTip = "Open commit on GitHub"
-                btn.tag = 0  // placeholder; URL stored separately
                 btn.sizeToFit()
-                btn.frame = NSRect(x: detailX, y: detailY, width: btn.intrinsicContentSize.width, height: 18)
+                btn.frame = NSRect(x: detailX, y: centerY, width: btn.intrinsicContentSize.width, height: itemHeight)
                 addSubview(btn)
                 detailViews.append(btn)
                 commitURL = url
                 detailX += btn.frame.width + 12
             } else {
                 let label = NSTextField(labelWithString: sha)
-                label.font = shaFont
+                label.font = detailFont
                 // Catppuccin Mocha: Overlay0 #6c7086
                 label.textColor = NSColor(red: 0x6c/255, green: 0x70/255, blue: 0x86/255, alpha: 1)
-                label.frame = NSRect(x: detailX, y: detailY + 2, width: 80, height: 14)
                 label.sizeToFit()
+                label.frame.origin = CGPoint(x: detailX, y: centerY)
+                label.frame.size.height = itemHeight
                 addSubview(label)
                 detailViews.append(label)
                 detailX += label.frame.width + 12
@@ -227,7 +224,7 @@ class WorkspaceTabBar: NSView {
 
             let prAttr = NSMutableAttributedString()
             prAttr.append(NSAttributedString(string: " PR #\(pr.number) (\(stateText)) \u{2197} ", attributes: [
-                .font: NSFont.monospacedDigitSystemFont(ofSize: 10, weight: .medium),
+                .font: detailBoldFont,
                 .foregroundColor: prColor,
             ]))
 
@@ -241,7 +238,7 @@ class WorkspaceTabBar: NSView {
             prBtn.action = #selector(openPRURL(_:))
             prBtn.toolTip = "#\(pr.number) \(pr.title)"
             prBtn.sizeToFit()
-            prBtn.frame = NSRect(x: detailX, y: detailY, width: prBtn.intrinsicContentSize.width, height: 16)
+            prBtn.frame = NSRect(x: detailX, y: centerY, width: prBtn.intrinsicContentSize.width, height: itemHeight)
             addSubview(prBtn)
             detailViews.append(prBtn)
             prInfoURL = URL(string: pr.url)
@@ -253,24 +250,24 @@ class WorkspaceTabBar: NSView {
             let diffAttr = NSMutableAttributedString()
             if stats.added > 0 {
                 diffAttr.append(NSAttributedString(string: "+\(stats.added)", attributes: [
-                    .font: NSFont.monospacedDigitSystemFont(ofSize: 10, weight: .medium),
+                    .font: detailBoldFont,
                     .foregroundColor: NSColor.systemGreen,
                 ]))
             }
             if stats.added > 0 && stats.deleted > 0 {
                 diffAttr.append(NSAttributedString(string: " ", attributes: [
-                    .font: NSFont.monospacedDigitSystemFont(ofSize: 10, weight: .medium),
+                    .font: detailBoldFont,
                 ]))
             }
             if stats.deleted > 0 {
                 diffAttr.append(NSAttributedString(string: "-\(stats.deleted)", attributes: [
-                    .font: NSFont.monospacedDigitSystemFont(ofSize: 10, weight: .medium),
+                    .font: detailBoldFont,
                     .foregroundColor: NSColor.systemRed,
                 ]))
             }
             let diffLabel = NSTextField(labelWithAttributedString: diffAttr)
             diffLabel.sizeToFit()
-            diffLabel.frame.origin = CGPoint(x: detailX, y: detailY + 2)
+            diffLabel.frame.origin = CGPoint(x: detailX, y: centerY)
             addSubview(diffLabel)
             detailViews.append(diffLabel)
         }
@@ -321,25 +318,19 @@ private class WorkspaceTab: NSView {
         super.init(frame: .zero)
         wantsLayer = true
 
+        layer?.cornerRadius = 6
         if let color = statusColor {
-            layer?.cornerRadius = 6
             layer?.backgroundColor = color.withAlphaComponent(0.45).cgColor
         } else if isActive {
-            // Round only top corners so tab blends into the detail strip below
-            layer?.cornerRadius = 6
-            layer?.maskedCorners = [.layerMinXMaxYCorner, .layerMaxXMaxYCorner]
             layer?.backgroundColor = WorkspaceTabBar.activeTabColor.cgColor
         } else {
-            layer?.cornerRadius = 6
             layer?.backgroundColor = NSColor.clear.cgColor
         }
 
         // Two-line layout: repo name (top) + workspace name (bottom)
-        // Active tabs are extended downward; offset content so it stays in the top portion
         let totalHeight: CGFloat = 38
-        let contentBase: CGFloat = isActive ? WorkspaceTabBar.detailRowHeight : 0
-        let repoY: CGFloat = contentBase + 20
-        let wsY: CGFloat = contentBase + 4
+        let repoY: CGFloat = 20
+        let wsY: CGFloat = 4
 
         let hasStatusColor = statusColor != nil
         let repoLabel = NSTextField(labelWithString: repoName)
@@ -366,7 +357,7 @@ private class WorkspaceTab: NSView {
         closeBtn.imageScaling = .scaleProportionallyDown
         closeBtn.isHidden = true
         closeBtn.toolTip = "Detach Workspace"
-        closeBtn.frame = NSRect(x: 0, y: contentBase + (totalHeight - 18) / 2, width: 18, height: 18)
+        closeBtn.frame = NSRect(x: 0, y: (totalHeight - 18) / 2, width: 18, height: 18)
         addSubview(closeBtn)
 
         let textWidth = max(
@@ -465,7 +456,7 @@ class WorkspaceWindowController: NSWindowController {
             workspaceTabBar.topAnchor.constraint(equalTo: contentView.topAnchor),
             workspaceTabBar.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
             workspaceTabBar.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
-            workspaceTabBar.heightAnchor.constraint(equalToConstant: 64),
+            workspaceTabBar.heightAnchor.constraint(equalToConstant: 75),
 
             contentArea.topAnchor.constraint(equalTo: workspaceTabBar.bottomAnchor),
             contentArea.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
