@@ -44,7 +44,7 @@ swift run neetly-app
  <a href="https://developer.apple.com/swift/"><img src="https://img.shields.io/badge/Swift_Package_Manager-F05138?logo=swift&logoColor=white" alt="SPM"></a>
 </p>
 
-## Viewint the diff
+## Viewinig the diff
 
 * Cmd+D is configured to show you the diff by executing `lazygit`. If you want to use a different tool for the diff
   then you can configure it in **Settings**.
