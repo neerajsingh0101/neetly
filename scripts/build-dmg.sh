@@ -95,6 +95,12 @@ cat > "$APP_DIR/Contents/Info.plist" << PLIST
 </plist>
 PLIST
 
+# Re-sign the whole .app ad-hoc so the outer bundle has a proper
+# _CodeSignature/CodeResources manifest (linker-signed leaves the bundle
+# resources unsealed, which interacts badly with translocation on some Macs).
+echo "==> Re-signing app bundle ad-hoc..."
+codesign --force --deep --sign - "$APP_DIR"
+
 echo "==> Creating DMG..."
 rm -f "$DMG_NAME"
 hdiutil create -volname "neetly" \

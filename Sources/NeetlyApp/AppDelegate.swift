@@ -87,12 +87,26 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    // Locate AppIcon.icns without going through Bundle.module — its auto-
+    // generated accessor fatalErrors at launch if the SwiftPM resource bundle
+    // directory isn't where it expects, which reportedly happens on some
+    // machines when the .app is launched via Gatekeeper/quarantine copy paths.
+    private static let appIconURL: URL? = {
+        if let url = Bundle.main.url(forResource: "AppIcon", withExtension: "icns") {
+            return url
+        }
+        // Dev fallback: `swift run` puts the SPM resource bundle next to the
+        // executable at .build/<triple>/<config>/neetly_neetly-app.bundle/.
+        let devCandidate = Bundle.main.bundleURL
+            .appendingPathComponent("neetly_neetly-app.bundle/AppIcon.icns")
+        return FileManager.default.fileExists(atPath: devCandidate.path) ? devCandidate : nil
+    }()
+
     /// Set the Dock/Cmd+Tab icon from the bundled resource. Needed for
     /// dev runs (`swift run neetly-app`) where there's no .app bundle to
     /// pick up CFBundleIconFile.
     private func setAppIcon() {
-        if let url = Bundle.module.url(forResource: "AppIcon", withExtension: "icns"),
-           let image = NSImage(contentsOf: url) {
+        if let url = Self.appIconURL, let image = NSImage(contentsOf: url) {
             NSApp.applicationIconImage = image
         }
     }
@@ -172,8 +186,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 ]
             ),
         ]
-        if let url = Bundle.module.url(forResource: "AppIcon", withExtension: "icns"),
-           let icon = NSImage(contentsOf: url) {
+        if let url = Self.appIconURL, let icon = NSImage(contentsOf: url) {
             options[.applicationIcon] = icon
         }
         NSApp.activate(ignoringOtherApps: true)
