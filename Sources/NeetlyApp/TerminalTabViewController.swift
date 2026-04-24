@@ -223,12 +223,23 @@ class TerminalTabViewController: NSViewController, LocalProcessTerminalViewDeleg
         terminalView.send(data: bytes[...])
     }
 
-    /// Send SIGINT to the shell process and its children (equivalent to Ctrl+C).
-    func interruptProcess() {
-        let pid = terminalView.process.shellPid
-        guard pid > 0 else { return }
-        // Send SIGINT to the process group so child processes (servers, etc.) also get it
-        kill(-pid, SIGINT)
+    /// Tear down the terminal cleanly: SIGTERM to the foreground job (so
+    /// servers release their ports), then terminate the shell and close the PTY.
+    ///
+    /// Signaling `-shellPid` is wrong: interactive zsh uses job control, so a
+    /// running foreground command (e.g. `ruby bin/launch`) lives in its own
+    /// process group — the shell's pgrp only contains the shell itself.
+    /// `tcgetpgrp` on the PTY master returns the slave's foreground pgrp,
+    /// which is exactly what Ctrl+C would target.
+    func terminateProcess() {
+        let fd = terminalView.process.childfd
+        if fd >= 0 {
+            let pgid = tcgetpgrp(fd)
+            if pgid > 0 {
+                kill(-pgid, SIGTERM)
+            }
+        }
+        terminalView.process.terminate()
     }
 
     // MARK: - LocalProcessTerminalViewDelegate

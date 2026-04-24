@@ -100,9 +100,10 @@ class Workspace {
     }
 
     func stop() {
-        // Send SIGINT to all terminal processes so they can clean up (release ports, etc.)
+        // SIGTERM foreground jobs and tear down shells so child processes
+        // (servers, Ruby scripts, etc.) release ports before detach.
         for pane in splitTree.paneControllers.values {
-            pane.interruptAllTerminals()
+            pane.terminateAllTerminals()
         }
         fileWatcher?.stop()
         socketServer.stop()

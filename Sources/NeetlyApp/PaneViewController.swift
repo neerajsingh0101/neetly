@@ -204,11 +204,12 @@ class PaneViewController: NSViewController {
         tabs.compactMap { $0.viewController as? BrowserTabViewController }
     }
 
-    /// Send SIGINT to all terminal processes in this pane.
-    func interruptAllTerminals() {
+    /// Terminate all terminal processes in this pane (SIGTERM to foreground
+    /// jobs, then shell teardown) so servers release ports on workspace close.
+    func terminateAllTerminals() {
         for tab in tabs {
             if let terminal = tab.viewController as? TerminalTabViewController {
-                terminal.interruptProcess()
+                terminal.terminateProcess()
             }
         }
     }
