@@ -182,7 +182,7 @@ struct RepoListScreen: View {
                 Spacer()
             } else {
                 List {
-                    ForEach(repos) { repo in
+                    ForEach(repos.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }) { repo in
                         Button(action: { onSelectRepo(repo) }) {
                             HStack {
                                 VStack(alignment: .leading, spacing: 6) {
