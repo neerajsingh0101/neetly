@@ -22,6 +22,14 @@ mkdir -p "$FRAMEWORKS_DIR"
 cp "$BUILD_DIR/neetly-app" "$APP_DIR/Contents/MacOS/neetly-app"
 cp "$BUILD_DIR/neetly" "$APP_DIR/Contents/MacOS/neetly"
 
+# Copy SwiftPM-generated resource bundles (what Bundle.module resolves to).
+# Without this, Bundle.module traps at launch with an assertion failure.
+for bundle in "$BUILD_DIR"/*.bundle; do
+    [ -e "$bundle" ] || continue
+    echo "==> Copying resource bundle: $(basename "$bundle")"
+    cp -R "$bundle" "$APP_DIR/Contents/Resources/"
+done
+
 # Copy app icon
 ICON_SRC="Sources/NeetlyApp/Resources/AppIcon.icns"
 if [ -f "$ICON_SRC" ]; then
