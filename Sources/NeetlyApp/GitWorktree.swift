@@ -100,7 +100,8 @@ class GitWorktree {
     }
 
     /// Delete a worktree: run `git worktree remove --force` from the parent repo,
-    /// then `rm -rf` as a fallback if anything is left.
+    /// then `rm -rf` as a fallback if anything is left. Also removes Claude
+    /// Code's per-project folder under ~/.claude/projects if present.
     static func deleteWorktree(parentRepoPath: String, repoName: String, workspaceName: String) -> Bool {
         let path = worktreePath(repoName: repoName, workspaceName: workspaceName)
 
@@ -114,7 +115,32 @@ class GitWorktree {
             try? FileManager.default.removeItem(atPath: path)
         }
 
-        return !FileManager.default.fileExists(atPath: path)
+        let succeeded = !FileManager.default.fileExists(atPath: path)
+        if succeeded {
+            removeClaudeProjectFolder(for: path)
+        }
+        return succeeded
+    }
+
+    /// Claude Code maintains per-project state under `~/.claude/projects/<slug>`,
+    /// where `<slug>` is the absolute path with `/` and `.` replaced by `-`.
+    /// When we delete a worktree, remove the matching folder so stale transcript
+    /// and memory state doesn't accumulate.
+    private static func removeClaudeProjectFolder(for worktreePath: String) {
+        let slug = worktreePath
+            .replacingOccurrences(of: "/", with: "-")
+            .replacingOccurrences(of: ".", with: "-")
+        let folder = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent(".claude/projects")
+            .appendingPathComponent(slug)
+            .path
+        guard FileManager.default.fileExists(atPath: folder) else { return }
+        do {
+            try FileManager.default.removeItem(atPath: folder)
+            NSLog("GitWorktree: removed Claude project folder \(folder)")
+        } catch {
+            NSLog("GitWorktree: failed to remove Claude project folder \(folder): \(error)")
+        }
     }
 
     func createWorktree(workspaceName: String, pullMain: Bool = true) -> WorktreeResult {
