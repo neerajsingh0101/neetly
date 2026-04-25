@@ -19,9 +19,16 @@ class Workspace {
     var onStatusChanged: (() -> Void)?
 
     init(config: WorkspaceConfig) {
+        // If a previous Claude Code session exists for this worktree, append
+        // --continue to any `claude` run command so re-attaching resumes the
+        // session instead of starting a fresh one.
+        let layout = GitWorktree.hasClaudeSession(forWorktreePath: config.repoPath)
+            ? Self.appendingClaudeContinue(to: config.layout)
+            : config.layout
+
         self.socketServer = SocketServer()
         self.splitTree = SplitTreeController(
-            layout: config.layout,
+            layout: layout,
             repoPath: config.repoPath,
             socketServer: socketServer
         )
@@ -97,6 +104,39 @@ class Workspace {
             }
             self.onStatusChanged?()
         }
+    }
+
+    /// Walk the layout and append `--continue` to any `.run` command whose
+    /// first token is exactly `claude`. Skips commands that already include
+    /// `--continue` or `--resume` to stay idempotent.
+    private static func appendingClaudeContinue(to node: LayoutNode) -> LayoutNode {
+        switch node {
+        case .run(let command):
+            return .run(command: appendContinueIfClaude(command))
+        case .visit:
+            return node
+        case .split(let direction, let first, let second, let firstSize, let secondSize):
+            return .split(
+                direction: direction,
+                first: appendingClaudeContinue(to: first),
+                second: appendingClaudeContinue(to: second),
+                firstSize: firstSize,
+                secondSize: secondSize
+            )
+        case .tabs(let children):
+            return .tabs(children.map(appendingClaudeContinue))
+        }
+    }
+
+    private static func appendContinueIfClaude(_ command: String) -> String {
+        let trimmed = command.trimmingCharacters(in: .whitespaces)
+        guard trimmed.split(separator: " ", maxSplits: 1).first.map(String.init) == "claude" else {
+            return command
+        }
+        if command.contains("--continue") || command.contains("--resume") {
+            return command
+        }
+        return command + " --continue"
     }
 
     func stop() {

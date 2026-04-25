@@ -124,16 +124,26 @@ class GitWorktree {
 
     /// Claude Code maintains per-project state under `~/.claude/projects/<slug>`,
     /// where `<slug>` is the absolute path with `/` and `.` replaced by `-`.
-    /// When we delete a worktree, remove the matching folder so stale transcript
-    /// and memory state doesn't accumulate.
-    private static func removeClaudeProjectFolder(for worktreePath: String) {
-        let slug = worktreePath
+    static func claudeProjectFolderPath(forWorktreePath path: String) -> String {
+        let slug = path
             .replacingOccurrences(of: "/", with: "-")
             .replacingOccurrences(of: ".", with: "-")
-        let folder = FileManager.default.homeDirectoryForCurrentUser
+        return FileManager.default.homeDirectoryForCurrentUser
             .appendingPathComponent(".claude/projects")
             .appendingPathComponent(slug)
             .path
+    }
+
+    /// True if a Claude Code project folder exists for this worktree, indicating
+    /// a session that `claude --continue` could resume.
+    static func hasClaudeSession(forWorktreePath path: String) -> Bool {
+        FileManager.default.fileExists(atPath: claudeProjectFolderPath(forWorktreePath: path))
+    }
+
+    /// Remove Claude Code's project folder for a deleted worktree so stale
+    /// transcript and memory state doesn't accumulate.
+    private static func removeClaudeProjectFolder(for worktreePath: String) {
+        let folder = claudeProjectFolderPath(forWorktreePath: worktreePath)
         guard FileManager.default.fileExists(atPath: folder) else { return }
         do {
             try FileManager.default.removeItem(atPath: folder)
