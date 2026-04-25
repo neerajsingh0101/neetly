@@ -203,14 +203,19 @@ class TerminalTabViewController: NSViewController, LocalProcessTerminalViewDeleg
             // shells and wipes out env-level PATH additions).
             let escapedExecDir = execDir.replacingOccurrences(of: "'", with: "'\\''")
             let pathExport = "export PATH='\(escapedExecDir)':\"$PATH\""
-            let cmd: String
-            if self.command.isEmpty {
-                cmd = "\(pathExport); cd '\(escapedPath)'\n"
-            } else {
-                cmd = "\(pathExport); cd '\(escapedPath)' && \(self.command)\n"
+
+            // Send the cd as its own line so the shell renders a fresh prompt
+            // showing the worktree directory before the user's command starts
+            // running. Joining them with `&&` would suppress the prompt update
+            // until the long-running command finished.
+            let setup = "\(pathExport); cd '\(escapedPath)'\n"
+            self.terminalView.send(data: Array(setup.utf8)[...])
+
+            guard !self.command.isEmpty else { return }
+            let runCmd = "\(self.command)\n"
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { [weak self] in
+                self?.terminalView.send(data: Array(runCmd.utf8)[...])
             }
-            let bytes = Array(cmd.utf8)
-            self.terminalView.send(data: bytes[...])
         }
     }
 
