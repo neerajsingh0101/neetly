@@ -557,11 +557,16 @@ class SessionWindowController: NSWindowController {
         let ws = sessions[activeIndex]
         DispatchQueue.global(qos: .utility).async {
             let stats = GitWorktree.diffStats(worktreePath: ws.config.repoPath)
+            let sha = GitWorktree.headShortSha(worktreePath: ws.config.repoPath)
+            let url = GitWorktree.headCommitURL(worktreePath: ws.config.repoPath)
             DispatchQueue.main.async { [weak self] in
                 guard let self else { return }
-                let changed = ws.diffStats?.added != stats?.added || ws.diffStats?.deleted != stats?.deleted
+                let statsChanged = ws.diffStats?.added != stats?.added || ws.diffStats?.deleted != stats?.deleted
+                let shaChanged = ws.commitSha != sha
                 ws.diffStats = stats
-                if changed { self.refreshTabBar() }
+                ws.commitSha = sha
+                ws.commitURL = url
+                if statsChanged || shaChanged { self.refreshTabBar() }
             }
         }
     }
