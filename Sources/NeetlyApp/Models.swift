@@ -14,13 +14,13 @@ indirect enum LayoutNode {
     case tabs([LayoutNode])  // multiple run/visit in one pane as tabs
 }
 
-// MARK: - Workspace Config
+// MARK: - Session Config
 
-struct WorkspaceConfig {
+struct SessionConfig {
     let repoPath: String
     let repoName: String
     /// Free-form display label shown in tabs and titles.
-    let workspaceName: String
+    let sessionName: String
     /// Sanitized, on-disk-unique identifier — also the git branch name and
     /// the last path component of `repoPath`.
     let worktreeName: String

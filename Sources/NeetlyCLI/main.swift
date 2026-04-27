@@ -87,7 +87,7 @@ case "run":
 case "notify":
     // neetly notify [color]  — default green, or: red, yellow, blue, orange, clear
     let color = args.count >= 3 ? args[2] : "green"
-    payload["action"] = "workspace.notify"
+    payload["action"] = "session.notify"
     payload["command"] = color
 
 default:

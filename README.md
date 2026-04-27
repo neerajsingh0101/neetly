@@ -206,7 +206,7 @@ All fields are optional — omit any to use the default. The config is read when
 - **IPC**: Unix domain socket at `/tmp/neetly-<pid>.sock`
 - **Persistence**:
   - `~/.config/neetly/repos.json` — list of added repos and their default layouts
-  - `~/.config/neetly/workspaces.json` — open sessions, restored on relaunch
+  - `~/.config/neetly/sessions.json` — open sessions, restored on relaunch
   - `~/.config/neetly/terminal.json` — terminal font and color overrides
   - `~/neetly/<repo-name>/<session-name>` — git worktrees are created here, one per session
 - **File watcher**: WKWebView (WebKit) does not support HMR (Hot Module Replacement) the way Chrome's DevTools protocol does, so neetly polls the repo every 2 seconds for changes to JavaScript/React/CSS files and triggers a browser reload when anything changes.

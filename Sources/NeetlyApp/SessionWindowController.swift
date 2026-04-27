@@ -1,12 +1,12 @@
 import AppKit
 
-/// Holds the runtime state for one workspace.
-class Workspace {
-    let config: WorkspaceConfig
+/// Holds the runtime state for one session.
+class Session {
+    let config: SessionConfig
     let socketServer: SocketServer
     let splitTree: SplitTreeController
     var fileWatcher: FileWatcher?
-    /// Status color for the workspace tab. nil = default, green = done, etc.
+    /// Status color for the session tab. nil = default, green = done, etc.
     var statusColor: NSColor?
     /// Resolved GitHub PR info. nil = no PR found or not yet fetched.
     var prInfo: GitHubPRInfo?
@@ -18,7 +18,7 @@ class Workspace {
     var diffStats: (added: Int, deleted: Int)?
     var onStatusChanged: (() -> Void)?
 
-    init(config: WorkspaceConfig) {
+    init(config: SessionConfig) {
         // If a previous Claude Code session exists for this worktree, append
         // --continue to any `claude` run command so re-attaching resumes the
         // session instead of starting a fresh one.
@@ -68,7 +68,7 @@ class Workspace {
         GitHubPRResolver.resolve(worktreePath: config.repoPath) { [weak self] info in
             guard let self = self else { return }
             self.prInfo = info
-            WorkspaceStore.shared.updatePRInfo(
+            SessionStore.shared.updatePRInfo(
                 repoPath: self.config.repoPath,
                 worktreeName: self.config.worktreeName,
                 prInfo: info
@@ -150,12 +150,12 @@ class Workspace {
     }
 }
 
-// MARK: - Workspace Tab Bar
+// MARK: - Session Tab Bar
 
-class WorkspaceTabBar: NSView {
-    var onSelectWorkspace: ((Int) -> Void)?
-    var onCloseWorkspace: ((Int) -> Void)?
-    var onNewWorkspace: (() -> Void)?
+class SessionTabBar: NSView {
+    var onSelectSession: ((Int) -> Void)?
+    var onCloseSession: ((Int) -> Void)?
+    var onNewSession: (() -> Void)?
     private var tabViews: [NSView] = []
     private var detailViews: [NSView] = []
     private let plusButton = NSButton()
@@ -180,7 +180,7 @@ class WorkspaceTabBar: NSView {
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError() }
 
-    func update(workspaces: [(repoName: String, workspaceName: String, commitSha: String?, commitURL: String?, isActive: Bool, statusColor: NSColor?, prInfo: GitHubPRInfo?, diffStats: (added: Int, deleted: Int)?)]) {
+    func update(sessions: [(repoName: String, sessionName: String, commitSha: String?, commitURL: String?, isActive: Bool, statusColor: NSColor?, prInfo: GitHubPRInfo?, diffStats: (added: Int, deleted: Int)?)]) {
         tabViews.forEach { $0.removeFromSuperview() }
         tabViews.removeAll()
         detailViews.forEach { $0.removeFromSuperview() }
@@ -191,12 +191,12 @@ class WorkspaceTabBar: NSView {
 
         // -- Tab row --
         var x: CGFloat = 4
-        for (i, ws) in workspaces.enumerated() {
-            let tab = WorkspaceTab(
-                index: i, repoName: ws.repoName, workspaceName: ws.workspaceName,
+        for (i, ws) in sessions.enumerated() {
+            let tab = SessionTab(
+                index: i, repoName: ws.repoName, sessionName: ws.sessionName,
                 isActive: ws.isActive, statusColor: ws.statusColor,
-                onSelect: { [weak self] idx in self?.onSelectWorkspace?(idx) },
-                onClose: { [weak self] idx in self?.onCloseWorkspace?(idx) }
+                onSelect: { [weak self] idx in self?.onSelectSession?(idx) },
+                onClose: { [weak self] idx in self?.onCloseSession?(idx) }
             )
             tab.frame.origin = CGPoint(x: x, y: tabRowY + 2)
             addSubview(tab)
@@ -204,7 +204,7 @@ class WorkspaceTabBar: NSView {
             x += tab.frame.width + 4
         }
 
-        if workspaces.isEmpty {
+        if sessions.isEmpty {
             plusButton.title = "+ Add new session"
             plusButton.font = .systemFont(ofSize: 14, weight: .medium)
             plusButton.sizeToFit()
@@ -217,8 +217,8 @@ class WorkspaceTabBar: NSView {
         plusButton.frame.origin.y = tabRowY + 8
         addSubview(plusButton)
 
-        // -- Detail row (full width, for active workspace's SHA + PR) --
-        guard let active = workspaces.first(where: { $0.isActive }) else { return }
+        // -- Detail row (full width, for active session's SHA + PR) --
+        guard let active = sessions.first(where: { $0.isActive }) else { return }
 
         let detailFont = NSFont.monospacedSystemFont(ofSize: 14, weight: .regular)
         let detailBoldFont = NSFont.monospacedDigitSystemFont(ofSize: 14, weight: .medium)
@@ -260,8 +260,8 @@ class WorkspaceTabBar: NSView {
         }
 
         if let pr = active.prInfo {
-            let prColor = WorkspaceTab.color(for: pr.state)
-            let stateText = WorkspaceTab.stateLabel(for: pr.state)
+            let prColor = SessionTab.color(for: pr.state)
+            let stateText = SessionTab.stateLabel(for: pr.state)
 
             let prAttr = NSMutableAttributedString()
             prAttr.append(NSAttributedString(string: " PR #\(pr.number) (\(stateText)) \u{2197} ", attributes: [
@@ -326,7 +326,7 @@ class WorkspaceTabBar: NSView {
     }
 
     @objc private func plusClicked() {
-        onNewWorkspace?()
+        onNewSession?()
     }
 
     static let activeTabColor = NSColor(red: 30/255, green: 30/255, blue: 46/255, alpha: 1.0)
@@ -342,14 +342,14 @@ class WorkspaceTabBar: NSView {
     }
 }
 
-private class WorkspaceTab: NSView {
+private class SessionTab: NSView {
     let index: Int
     private let onSelect: (Int) -> Void
     private let onClose: (Int) -> Void
     private let closeBtn: NSButton
     private var trackingArea: NSTrackingArea?
 
-    init(index: Int, repoName: String, workspaceName: String,
+    init(index: Int, repoName: String, sessionName: String,
          isActive: Bool, statusColor: NSColor?,
          onSelect: @escaping (Int) -> Void, onClose: @escaping (Int) -> Void) {
         self.index = index
@@ -363,12 +363,12 @@ private class WorkspaceTab: NSView {
         if let color = statusColor {
             layer?.backgroundColor = color.withAlphaComponent(0.45).cgColor
         } else if isActive {
-            layer?.backgroundColor = WorkspaceTabBar.activeTabColor.cgColor
+            layer?.backgroundColor = SessionTabBar.activeTabColor.cgColor
         } else {
             layer?.backgroundColor = NSColor.clear.cgColor
         }
 
-        // Two-line layout: repo name (top) + workspace name (bottom)
+        // Two-line layout: repo name (top) + session name (bottom)
         let totalHeight: CGFloat = 38
         let repoY: CGFloat = 20
         let wsY: CGFloat = 4
@@ -381,7 +381,7 @@ private class WorkspaceTab: NSView {
         repoLabel.frame = NSRect(x: 8, y: repoY, width: 140, height: 14)
         addSubview(repoLabel)
 
-        let wsLabel = NSTextField(labelWithString: workspaceName)
+        let wsLabel = NSTextField(labelWithString: sessionName)
         wsLabel.font = .systemFont(ofSize: 14, weight: isActive ? .semibold : .regular)
         // Catppuccin Mocha: Text #cdd6f4
         wsLabel.textColor = hasStatusColor ? .black : isActive ? NSColor(red: 0xcd/255, green: 0xd6/255, blue: 0xf4/255, alpha: 1) : .labelColor
@@ -455,14 +455,14 @@ private class WorkspaceTab: NSView {
 
 // MARK: - Window Controller
 
-class WorkspaceWindowController: NSWindowController {
-    private var workspaces: [Workspace] = []
+class SessionWindowController: NSWindowController {
+    private var sessions: [Session] = []
     private var activeIndex: Int = -1
-    private let workspaceTabBar = WorkspaceTabBar(frame: .zero)
+    private let sessionTabBar = SessionTabBar(frame: .zero)
     private let contentArea = NSView()
     private var prRefreshTimer: Timer?
     private var diffStatsTimer: Timer?
-    var onNewWorkspace: (() -> Void)?
+    var onNewSession: (() -> Void)?
 
     init() {
         let window = NSWindow(
@@ -473,7 +473,7 @@ class WorkspaceWindowController: NSWindowController {
         )
         window.title = "neetly"
         window.center()
-        window.setFrameAutosaveName("WorkspaceWindow")
+        window.setFrameAutosaveName("SessionWindow")
         super.init(window: window)
         setupLayout()
     }
@@ -484,51 +484,51 @@ class WorkspaceWindowController: NSWindowController {
     private func setupLayout() {
         guard let contentView = window?.contentView else { return }
 
-        workspaceTabBar.translatesAutoresizingMaskIntoConstraints = false
-        workspaceTabBar.onSelectWorkspace = { [weak self] i in self?.selectWorkspace(at: i) }
-        workspaceTabBar.onCloseWorkspace = { [weak self] i in self?.closeWorkspace(at: i) }
-        workspaceTabBar.onNewWorkspace = { [weak self] in self?.onNewWorkspace?() }
-        contentView.addSubview(workspaceTabBar)
+        sessionTabBar.translatesAutoresizingMaskIntoConstraints = false
+        sessionTabBar.onSelectSession = { [weak self] i in self?.selectSession(at: i) }
+        sessionTabBar.onCloseSession = { [weak self] i in self?.closeSession(at: i) }
+        sessionTabBar.onNewSession = { [weak self] in self?.onNewSession?() }
+        contentView.addSubview(sessionTabBar)
 
         contentArea.translatesAutoresizingMaskIntoConstraints = false
         contentView.addSubview(contentArea)
 
         NSLayoutConstraint.activate([
-            workspaceTabBar.topAnchor.constraint(equalTo: contentView.topAnchor),
-            workspaceTabBar.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
-            workspaceTabBar.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
-            workspaceTabBar.heightAnchor.constraint(equalToConstant: 75),
+            sessionTabBar.topAnchor.constraint(equalTo: contentView.topAnchor),
+            sessionTabBar.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
+            sessionTabBar.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
+            sessionTabBar.heightAnchor.constraint(equalToConstant: 75),
 
-            contentArea.topAnchor.constraint(equalTo: workspaceTabBar.bottomAnchor),
+            contentArea.topAnchor.constraint(equalTo: sessionTabBar.bottomAnchor),
             contentArea.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
             contentArea.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
             contentArea.bottomAnchor.constraint(equalTo: contentView.bottomAnchor),
         ])
     }
 
-    func addWorkspace(config: WorkspaceConfig) {
-        // If this workspace is already open, just switch to it
-        if let existing = workspaces.firstIndex(where: { $0.config.repoPath == config.repoPath }) {
-            selectWorkspace(at: existing)
+    func addSession(config: SessionConfig) {
+        // If this session is already open, just switch to it
+        if let existing = sessions.firstIndex(where: { $0.config.repoPath == config.repoPath }) {
+            selectSession(at: existing)
             return
         }
 
-        let ws = Workspace(config: config)
+        let ws = Session(config: config)
         ws.onStatusChanged = { [weak self] in
             self?.refreshTabBar()
         }
         ws.setupSocketHandler { [weak self, weak ws] command in
             guard let ws = ws else { return nil }
-            return self?.handleSocketCommand(command, workspace: ws)
+            return self?.handleSocketCommand(command, session: ws)
         }
-        workspaces.append(ws)
-        selectWorkspace(at: workspaces.count - 1)
+        sessions.append(ws)
+        selectSession(at: sessions.count - 1)
 
-        // Persist to workspace store
-        WorkspaceStore.shared.add(SavedWorkspace(
+        // Persist to session store
+        SessionStore.shared.add(SavedSession(
             repoPath: config.repoPath,
             repoName: config.repoName,
-            workspaceName: config.workspaceName,
+            sessionName: config.sessionName,
             worktreeName: config.worktreeName,
             layoutText: config.layoutText,
             autoReloadOnFileChange: config.autoReloadOnFileChange
@@ -544,7 +544,7 @@ class WorkspaceWindowController: NSWindowController {
             }
         }
 
-        // Start diff stats polling for active workspace
+        // Start diff stats polling for active session
         if diffStatsTimer == nil {
             diffStatsTimer = Timer.scheduledTimer(withTimeInterval: 3, repeats: true) { [weak self] _ in
                 self?.refreshActiveDiffStats()
@@ -553,8 +553,8 @@ class WorkspaceWindowController: NSWindowController {
     }
 
     private func refreshActiveDiffStats() {
-        guard activeIndex >= 0 && activeIndex < workspaces.count else { return }
-        let ws = workspaces[activeIndex]
+        guard activeIndex >= 0 && activeIndex < sessions.count else { return }
+        let ws = sessions[activeIndex]
         DispatchQueue.global(qos: .utility).async {
             let stats = GitWorktree.diffStats(worktreePath: ws.config.repoPath)
             DispatchQueue.main.async { [weak self] in
@@ -567,66 +567,66 @@ class WorkspaceWindowController: NSWindowController {
     }
 
     private func refreshAllPRStatuses() {
-        for ws in workspaces {
+        for ws in sessions {
             ws.refreshPRStatus()
         }
     }
 
-    private func selectWorkspace(at index: Int) {
-        guard index >= 0 && index < workspaces.count else { return }
+    private func selectSession(at index: Int) {
+        guard index >= 0 && index < sessions.count else { return }
 
-        // Detach every workspace's splitTree view from contentArea before adding
+        // Detach every session's splitTree view from contentArea before adding
         // the new one. removeFromSuperview is a no-op when the view isn't
         // attached, so this is cheap — and it guarantees no stale view is left
         // behind if activeIndex ever got out of sync with what's in the hierarchy.
-        for ws in workspaces {
+        for ws in sessions {
             ws.splitTree.view.removeFromSuperview()
         }
 
         activeIndex = index
-        let ws = workspaces[index]
+        let ws = sessions[index]
         ws.statusColor = nil
         ws.splitTree.view.frame = contentArea.bounds
         ws.splitTree.view.autoresizingMask = [.width, .height]
         contentArea.addSubview(ws.splitTree.view)
 
-        window?.title = "neetly - \(ws.config.repoName) - \(ws.config.workspaceName)"
+        window?.title = "neetly - \(ws.config.repoName) - \(ws.config.sessionName)"
         refreshTabBar()
     }
 
-    /// Close any workspace whose repoPath (worktree path) matches.
+    /// Close any session whose repoPath (worktree path) matches.
     /// Called when a worktree is deleted from the setup screen.
-    func closeWorkspaceByPath(_ path: String) {
-        if let index = workspaces.firstIndex(where: { $0.config.repoPath == path }) {
-            closeWorkspace(at: index)
+    func closeSessionByPath(_ path: String) {
+        if let index = sessions.firstIndex(where: { $0.config.repoPath == path }) {
+            closeSession(at: index)
         }
     }
 
-    private func closeWorkspace(at index: Int) {
-        guard index >= 0 && index < workspaces.count else { return }
+    private func closeSession(at index: Int) {
+        guard index >= 0 && index < sessions.count else { return }
 
-        // Mark as detached (keep in store so it stays in the workspace list,
+        // Mark as detached (keep in store so it stays in the session list,
         // but won't auto-reopen on next app launch).
-        let cfg = workspaces[index].config
-        WorkspaceStore.shared.markClosed(repoPath: cfg.repoPath, worktreeName: cfg.worktreeName)
+        let cfg = sessions[index].config
+        SessionStore.shared.markClosed(repoPath: cfg.repoPath, worktreeName: cfg.worktreeName)
 
         // Detach the currently-active view from contentArea before we mutate
         // the array. Otherwise, if `index < activeIndex`, the removal shifts
-        // activeIndex onto a different workspace and the previously-active
+        // activeIndex onto a different session and the previously-active
         // view stays stuck in contentArea.
-        if activeIndex >= 0 && activeIndex < workspaces.count {
-            workspaces[activeIndex].splitTree.view.removeFromSuperview()
+        if activeIndex >= 0 && activeIndex < sessions.count {
+            sessions[activeIndex].splitTree.view.removeFromSuperview()
         }
 
-        workspaces[index].stop()
-        workspaces.remove(at: index)
+        sessions[index].stop()
+        sessions.remove(at: index)
 
-        // If a workspace before the active one was closed, the active one shifted down.
+        // If a session before the active one was closed, the active one shifted down.
         if index < activeIndex {
             activeIndex -= 1
         }
 
-        if workspaces.isEmpty {
+        if sessions.isEmpty {
             activeIndex = -1
             window?.title = "neetly"
             prRefreshTimer?.invalidate()
@@ -635,27 +635,27 @@ class WorkspaceWindowController: NSWindowController {
             diffStatsTimer = nil
             refreshTabBar()
         } else {
-            activeIndex = min(max(0, activeIndex), workspaces.count - 1)
-            selectWorkspace(at: activeIndex)
+            activeIndex = min(max(0, activeIndex), sessions.count - 1)
+            selectSession(at: activeIndex)
         }
     }
 
     private func refreshTabBar() {
-        let tabs = workspaces.enumerated().map { (i, ws) in
-            (repoName: ws.config.repoName, workspaceName: ws.config.workspaceName, commitSha: ws.commitSha, commitURL: ws.commitURL, isActive: i == activeIndex, statusColor: ws.statusColor, prInfo: ws.prInfo, diffStats: ws.diffStats)
+        let tabs = sessions.enumerated().map { (i, ws) in
+            (repoName: ws.config.repoName, sessionName: ws.config.sessionName, commitSha: ws.commitSha, commitURL: ws.commitURL, isActive: i == activeIndex, statusColor: ws.statusColor, prInfo: ws.prInfo, diffStats: ws.diffStats)
         }
-        workspaceTabBar.update(workspaces: tabs)
+        sessionTabBar.update(sessions: tabs)
     }
 
-    /// Get the active workspace's split tree for menu actions.
+    /// Get the active session's split tree for menu actions.
     func getSplitTree() -> SplitTreeController? {
-        guard activeIndex >= 0 && activeIndex < workspaces.count else { return nil }
-        return workspaces[activeIndex].splitTree
+        guard activeIndex >= 0 && activeIndex < sessions.count else { return nil }
+        return sessions[activeIndex].splitTree
     }
 
     // MARK: - Socket Command Handling
 
-    private func handleSocketCommand(_ command: SocketCommand, workspace ws: Workspace) -> Data? {
+    private func handleSocketCommand(_ command: SocketCommand, session ws: Session) -> Data? {
         switch command.action {
         case "browser.open":
             guard let url = command.url else { return nil }
@@ -688,7 +688,7 @@ class WorkspaceWindowController: NSWindowController {
             }
             return jsonResponse(["ok": false, "error": "tab not found: \(tabId)"])
 
-        case "workspace.notify":
+        case "session.notify":
             let colorName = command.command ?? "green"
             let color: NSColor
             switch colorName {
@@ -709,7 +709,7 @@ class WorkspaceWindowController: NSWindowController {
         }
     }
 
-    private func resolvePane(_ command: SocketCommand, in ws: Workspace) -> PaneViewController? {
+    private func resolvePane(_ command: SocketCommand, in ws: Session) -> PaneViewController? {
         if let seq = command.paneSeq {
             if let pane = ws.splitTree.paneControllers.values.first(where: { $0.seqId == seq }) {
                 return pane

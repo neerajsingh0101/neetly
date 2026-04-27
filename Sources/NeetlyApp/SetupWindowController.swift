@@ -2,7 +2,7 @@ import AppKit
 import SwiftUI
 
 class SetupWindowController: NSWindowController {
-    var onLaunch: ((WorkspaceConfig) -> Void)?
+    var onLaunch: ((SessionConfig) -> Void)?
 
     convenience init(initialScreen: SetupScreen = .repoList) {
         let window = NSWindow(

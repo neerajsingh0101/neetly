@@ -39,7 +39,7 @@ class GitWorktree {
         return "\(NeetlySettings.shared.worktreeBaseDir)/\(repoName)/\(worktreeName)"
     }
 
-    /// Convert a free-form workspace name to a sanitized, git-branch-safe slug.
+    /// Convert a free-form session name to a sanitized, git-branch-safe slug.
     static func sanitizeForWorktree(_ name: String) -> String {
         return name
             .replacingOccurrences(of: " ", with: "-")

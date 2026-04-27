@@ -6,8 +6,8 @@ enum SetupScreen {
     case repoList
     case addRepo
     case editLayout(RepoConfig)
-    case workspaceList(RepoConfig)
-    case workspaceName(RepoConfig)
+    case sessionList(RepoConfig)
+    case sessionName(RepoConfig)
     case settings
     case activities
 }
@@ -17,9 +17,9 @@ enum SetupScreen {
 struct SetupView: View {
     @State private var screen: SetupScreen
     @State private var repos: [RepoConfig] = []
-    var onLaunch: (WorkspaceConfig) -> Void
+    var onLaunch: (SessionConfig) -> Void
 
-    init(initialScreen: SetupScreen = .repoList, onLaunch: @escaping (WorkspaceConfig) -> Void) {
+    init(initialScreen: SetupScreen = .repoList, onLaunch: @escaping (SessionConfig) -> Void) {
         _screen = State(initialValue: initialScreen)
         self.onLaunch = onLaunch
     }
@@ -29,7 +29,7 @@ struct SetupView: View {
         case .repoList:
             RepoListScreen(
                 repos: $repos,
-                onSelectRepo: { repo in screen = .workspaceList(repo) },
+                onSelectRepo: { repo in screen = .sessionList(repo) },
                 onAddRepo: { screen = .addRepo },
                 onEditLayout: { repo in screen = .editLayout(repo) },
                 onSettings: { screen = .settings },
@@ -42,7 +42,7 @@ struct SetupView: View {
                 onAdd: { repo in
                     RepoStore.shared.add(repo)
                     repos = RepoStore.shared.load()
-                    screen = .workspaceName(repo)
+                    screen = .sessionName(repo)
                 },
                 onCancel: { screen = .repoList }
             )
@@ -58,18 +58,18 @@ struct SetupView: View {
                 onCancel: { screen = .repoList }
             )
 
-        case .workspaceList(let repo):
-            WorkspaceListScreen(
+        case .sessionList(let repo):
+            SessionListScreen(
                 repo: repo,
-                onSelectWorkspace: { workspaceName, worktreeName in
+                onSelectSession: { sessionName, worktreeName in
                     let parser = LayoutParser()
                     let dedented = dedent(repo.layoutText)
                     guard let layout = parser.parse(dedented) else { return }
                     let worktreePath = GitWorktree.worktreePath(repoName: repo.name, worktreeName: worktreeName)
-                    let config = WorkspaceConfig(
+                    let config = SessionConfig(
                         repoPath: worktreePath,
                         repoName: repo.name,
-                        workspaceName: workspaceName,
+                        sessionName: sessionName,
                         worktreeName: worktreeName,
                         layout: layout,
                         layoutText: repo.layoutText,
@@ -77,29 +77,29 @@ struct SetupView: View {
                     )
                     onLaunch(config)
                 },
-                onAddWorkspace: { screen = .workspaceName(repo) },
+                onAddSession: { screen = .sessionName(repo) },
                 onBack: { screen = .repoList }
             )
 
-        case .workspaceName(let repo):
-            WorkspaceNameScreen(
+        case .sessionName(let repo):
+            SessionNameScreen(
                 repo: repo,
-                onStart: { workspaceName, worktreeName, layoutText, autoReload, worktreePath in
+                onStart: { sessionName, worktreeName, layoutText, autoReload, worktreePath in
                     let parser = LayoutParser()
                     let dedented = dedent(layoutText)
                     guard let layout = parser.parse(dedented) else { return }
 
-                    NSLog("Workspace: using repoPath = \(worktreePath)")
-                    let config = WorkspaceConfig(
+                    NSLog("Session: using repoPath = \(worktreePath)")
+                    let config = SessionConfig(
                         repoPath: worktreePath,
                         repoName: repo.name,
-                        workspaceName: workspaceName,
+                        sessionName: sessionName,
                         worktreeName: worktreeName,
                         layout: layout,
                         layoutText: layoutText,
                         autoReloadOnFileChange: autoReload
                     )
-                    ActivityStore.shared.log(.workspaceCreated, repoName: repo.name, detail: workspaceName)
+                    ActivityStore.shared.log(.sessionCreated, repoName: repo.name, detail: sessionName)
                     onLaunch(config)
                 },
                 onBack: { screen = .repoList }
@@ -361,17 +361,17 @@ struct AddRepoScreen: View {
     }
 }
 
-// MARK: - Screen 3: Workspace Name
+// MARK: - Screen 3: Session Name
 
-struct WorkspaceNameScreen: View {
+struct SessionNameScreen: View {
     let repo: RepoConfig
-    @State private var workspaceName: String = ""
+    @State private var sessionName: String = ""
     @State private var layoutText: String = ""
     @State private var autoReload: Bool = true
     @State private var isLoading: Bool = false
     @State private var errorMessage: String?
     @FocusState private var isNameFocused: Bool
-    /// (workspaceName, worktreeName, layoutText, autoReload, worktreePath)
+    /// (sessionName, worktreeName, layoutText, autoReload, worktreePath)
     var onStart: (String, String, String, Bool, String) -> Void
     var onBack: () -> Void
 
@@ -394,13 +394,13 @@ struct WorkspaceNameScreen: View {
             VStack(alignment: .leading, spacing: 8) {
                 Text("New Session Name")
                     .font(.system(size: 22, weight: .semibold))
-                TextField("", text: $workspaceName)
+                TextField("", text: $sessionName)
                     .textFieldStyle(.roundedBorder)
                     .font(.system(size: 19))
                     .focused($isNameFocused)
-                    .onSubmit { startWorkspace() }
+                    .onSubmit { startSession() }
                     .disabled(isLoading)
-                    .onChange(of: workspaceName) { _, newValue in
+                    .onChange(of: sessionName) { _, newValue in
                         let trimmed = newValue.trimmingCharacters(in: .whitespaces)
                         if trimmed.count > 60 {
                             errorMessage = "Session name must be 60 characters or fewer (current: \(trimmed.count))."
@@ -449,11 +449,11 @@ struct WorkspaceNameScreen: View {
                     ProgressView()
                         .controlSize(.small)
                         .tint(.green)
-                    Text("Creating worktree...")
+                    Text("Creating session...")
                         .font(.system(size: 15, weight: .semibold))
                         .foregroundColor(.green)
                 } else {
-                    Button("Start") { startWorkspace() }
+                    Button("Start") { startSession() }
                         .keyboardShortcut(.return)
                         .buttonStyle(.borderedProminent)
                         .controlSize(.large)
@@ -469,11 +469,11 @@ struct WorkspaceNameScreen: View {
         }
     }
 
-    private func startWorkspace() {
+    private func startSession() {
         guard !isLoading else { return }
         errorMessage = nil
 
-        let name = workspaceName.trimmingCharacters(in: .whitespaces)
+        let name = sessionName.trimmingCharacters(in: .whitespaces)
         guard !name.isEmpty else {
             errorMessage = "Please provide a session name."
             return
@@ -565,41 +565,41 @@ struct EditLayoutScreen: View {
     }
 }
 
-// MARK: - Screen 5: Workspace List (existing workspaces for a repo)
+// MARK: - Screen 5: Session List (existing sessions for a repo)
 
-struct WorkspaceListEntry: Identifiable {
-    let workspaceName: String
+struct SessionListEntry: Identifiable {
+    let sessionName: String
     let worktreeName: String
     var prInfo: GitHubPRInfo?
     var id: String { worktreeName }
 }
 
-struct WorkspaceListScreen: View {
+struct SessionListScreen: View {
     let repo: RepoConfig
-    @State private var workspaces: [WorkspaceListEntry] = []
-    @State private var workspaceToDelete: WorkspaceListEntry?
-    /// Called with (workspaceName, worktreeName).
-    var onSelectWorkspace: (String, String) -> Void
-    var onAddWorkspace: () -> Void
+    @State private var sessions: [SessionListEntry] = []
+    @State private var sessionToDelete: SessionListEntry?
+    /// Called with (sessionName, worktreeName).
+    var onSelectSession: (String, String) -> Void
+    var onAddSession: () -> Void
     var onBack: () -> Void
 
-    private func loadWorkspaces() -> [WorkspaceListEntry] {
-        return WorkspaceStore.shared.load()
+    private func loadSessions() -> [SessionListEntry] {
+        return SessionStore.shared.load()
             .filter { $0.repoName == repo.name }
-            .map { WorkspaceListEntry(workspaceName: $0.workspaceName, worktreeName: $0.worktreeName, prInfo: $0.prInfo) }
+            .map { SessionListEntry(sessionName: $0.sessionName, worktreeName: $0.worktreeName, prInfo: $0.prInfo) }
     }
 
     private func fetchMissingPRInfo() {
         let repoName = repo.name
-        for entry in workspaces where entry.prInfo == nil {
+        for entry in sessions where entry.prInfo == nil {
             let worktreePath = GitWorktree.worktreePath(repoName: repoName, worktreeName: entry.worktreeName)
             let worktreeName = entry.worktreeName
             GitHubPRResolver.resolve(worktreePath: worktreePath) { info in
                 guard let info = info else { return }
-                if let idx = workspaces.firstIndex(where: { $0.worktreeName == worktreeName }) {
-                    workspaces[idx].prInfo = info
+                if let idx = sessions.firstIndex(where: { $0.worktreeName == worktreeName }) {
+                    sessions[idx].prInfo = info
                 }
-                WorkspaceStore.shared.updatePRInfo(
+                SessionStore.shared.updatePRInfo(
                     repoPath: worktreePath,
                     worktreeName: worktreeName,
                     prInfo: info
@@ -616,7 +616,7 @@ struct WorkspaceListScreen: View {
                 }
                 .buttonStyle(.plain)
                 Spacer()
-                Button(action: onAddWorkspace) {
+                Button(action: onAddSession) {
                     Label("Add Session", systemImage: "plus")
                         .font(.system(size: 16, weight: .semibold))
                 }
@@ -635,7 +635,7 @@ struct WorkspaceListScreen: View {
 
             Divider()
 
-            if workspaces.isEmpty {
+            if sessions.isEmpty {
                 Spacer()
                 VStack(spacing: 12) {
                     Text("No sessions yet")
@@ -648,18 +648,18 @@ struct WorkspaceListScreen: View {
                 Spacer()
             } else {
                 List {
-                    ForEach(workspaces) { entry in
-                        Button(action: { onSelectWorkspace(entry.workspaceName, entry.worktreeName) }) {
+                    ForEach(sessions) { entry in
+                        Button(action: { onSelectSession(entry.sessionName, entry.worktreeName) }) {
                             HStack {
                                 HStack(spacing: 10) {
-                                    Text(entry.workspaceName)
+                                    Text(entry.sessionName)
                                         .font(.system(size: 22, weight: .semibold))
                                     if let pr = entry.prInfo {
                                         PRBadge(prInfo: pr)
                                     }
                                     Menu {
                                         Button(role: .destructive, action: {
-                                            workspaceToDelete = entry
+                                            sessionToDelete = entry
                                         }) {
                                             Label("Delete Session", systemImage: "trash")
                                         }
@@ -687,27 +687,27 @@ struct WorkspaceListScreen: View {
         }
         .frame(minWidth: 700, minHeight: 600)
         .onAppear {
-            workspaces = loadWorkspaces()
+            sessions = loadSessions()
             fetchMissingPRInfo()
         }
-        .sheet(item: $workspaceToDelete) { target in
+        .sheet(item: $sessionToDelete) { target in
             DeleteWorktreeSheet(
                 repoName: repo.name,
-                workspaceName: target.workspaceName,
+                sessionName: target.sessionName,
                 worktreeName: target.worktreeName,
-                onCancel: { workspaceToDelete = nil },
+                onCancel: { sessionToDelete = nil },
                 onDelete: {
-                    let workspaceLabel = target.workspaceName
+                    let sessionLabel = target.sessionName
                     let worktreeName = target.worktreeName
-                    ActivityStore.shared.log(.workspaceDeleted, repoName: repo.name, detail: workspaceLabel)
-                    workspaces.removeAll { $0.worktreeName == worktreeName }
-                    workspaceToDelete = nil
+                    ActivityStore.shared.log(.sessionDeleted, repoName: repo.name, detail: sessionLabel)
+                    sessions.removeAll { $0.worktreeName == worktreeName }
+                    sessionToDelete = nil
 
-                    // Close the workspace if currently open (must be on main thread)
+                    // Close the session if currently open (must be on main thread)
                     let worktreePath = GitWorktree.worktreePath(repoName: repo.name, worktreeName: worktreeName)
-                    WorkspaceStore.shared.remove(repoPath: worktreePath, worktreeName: worktreeName)
+                    SessionStore.shared.remove(repoPath: worktreePath, worktreeName: worktreeName)
                     if let appDelegate = NSApp.delegate as? AppDelegate {
-                        appDelegate.workspaceWindowController?.closeWorkspaceByPath(worktreePath)
+                        appDelegate.sessionWindowController?.closeSessionByPath(worktreePath)
                     }
 
                     // Run the actual deletion in the background
@@ -728,14 +728,14 @@ struct WorkspaceListScreen: View {
 
 struct DeleteWorktreeSheet: View {
     let repoName: String
-    let workspaceName: String
+    let sessionName: String
     let worktreeName: String
     var onCancel: () -> Void
     var onDelete: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text("Deleting \(workspaceName)?")
+            Text("Deleting \(sessionName)?")
                 .font(.system(size: 22, weight: .semibold))
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal, 24)
@@ -1014,16 +1014,16 @@ struct ActivityScreen: View {
 
     private func activityIcon(_ kind: Activity.Kind) -> String {
         switch kind {
-        case .workspaceCreated: return "plus.circle.fill"
-        case .workspaceDeleted: return "trash.circle.fill"
+        case .sessionCreated: return "plus.circle.fill"
+        case .sessionDeleted: return "trash.circle.fill"
         case .prOpened:         return "arrow.triangle.pull"
         }
     }
 
     private func activityColor(_ kind: Activity.Kind) -> Color {
         switch kind {
-        case .workspaceCreated: return .green
-        case .workspaceDeleted: return .red
+        case .sessionCreated: return .green
+        case .sessionDeleted: return .red
         case .prOpened:         return .purple
         }
     }

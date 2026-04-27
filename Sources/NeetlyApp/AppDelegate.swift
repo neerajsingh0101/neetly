@@ -2,7 +2,7 @@ import AppKit
 
 class AppDelegate: NSObject, NSApplicationDelegate {
     var setupWindowController: SetupWindowController?
-    var workspaceWindowController: WorkspaceWindowController?
+    var sessionWindowController: SessionWindowController?
     private var escapeMonitor: Any?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -13,29 +13,29 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         setupMainMenu()
         setupEscapeKeyMonitor()
 
-        let toRestore = WorkspaceStore.shared.load().filter { $0.isOpen }
+        let toRestore = SessionStore.shared.load().filter { $0.isOpen }
         if toRestore.isEmpty {
             showSetupWindow()
         } else {
-            restoreWorkspaces(toRestore)
+            restoreSessions(toRestore)
         }
     }
 
-    private func restoreWorkspaces(_ saved: [SavedWorkspace]) {
+    private func restoreSessions(_ saved: [SavedSession]) {
         let parser = LayoutParser()
         for ws in saved {
             let dedented = dedent(ws.layoutText)
             guard let layout = parser.parse(dedented) else { continue }
-            let config = WorkspaceConfig(
+            let config = SessionConfig(
                 repoPath: ws.repoPath,
                 repoName: ws.repoName,
-                workspaceName: ws.workspaceName,
+                sessionName: ws.sessionName,
                 worktreeName: ws.worktreeName,
                 layout: layout,
                 layoutText: ws.layoutText,
                 autoReloadOnFileChange: ws.autoReloadOnFileChange
             )
-            launchWorkspace(config)
+            launchSession(config)
         }
     }
 
@@ -50,7 +50,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private func showSetupWindow(initialScreen: SetupScreen = .repoList) {
         setupWindowController = SetupWindowController(initialScreen: initialScreen)
         setupWindowController?.onLaunch = { [weak self] config in
-            self?.launchWorkspace(config)
+            self?.launchSession(config)
         }
         setupWindowController?.showWindow(nil)
         NSApp.activate(ignoringOtherApps: true)
@@ -60,18 +60,18 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         showSetupWindow(initialScreen: .settings)
     }
 
-    private func launchWorkspace(_ config: WorkspaceConfig) {
+    private func launchSession(_ config: SessionConfig) {
         setupWindowController?.close()
 
-        if workspaceWindowController == nil {
-            workspaceWindowController = WorkspaceWindowController()
-            workspaceWindowController?.onNewWorkspace = { [weak self] in
+        if sessionWindowController == nil {
+            sessionWindowController = SessionWindowController()
+            sessionWindowController?.onNewSession = { [weak self] in
                 self?.showSetupWindow()
             }
-            workspaceWindowController?.showWindow(nil)
+            sessionWindowController?.showWindow(nil)
         }
 
-        workspaceWindowController?.addWorkspace(config: config)
+        sessionWindowController?.addSession(config: config)
         NSApp.activate(ignoringOtherApps: true)
     }
 
@@ -81,7 +81,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private func setupEscapeKeyMonitor() {
         escapeMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
             guard event.keyCode == 53 else { return event }  // 53 = Escape
-            guard let splitTree = self?.workspaceWindowController?.getSplitTree(),
+            guard let splitTree = self?.sessionWindowController?.getSplitTree(),
                   splitTree.isMaximized else { return event }
             splitTree.toggleMaximizeForActivePane()
             return nil  // consume the event
@@ -195,7 +195,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func toggleMaximize() {
-        guard let splitTree = workspaceWindowController?.getSplitTree() else { return }
+        guard let splitTree = sessionWindowController?.getSplitTree() else { return }
         if splitTree.isMaximized {
             splitTree.toggleMaximizeForActivePane()
         } else if let pane = findFocusedPane() {
@@ -204,7 +204,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func openDiff() {
-        guard let splitTree = workspaceWindowController?.getSplitTree() else { return }
+        guard let splitTree = sessionWindowController?.getSplitTree() else { return }
 
         // Find the last pane (rightmost/bottommost) by seqId
         guard let pane = splitTree.paneControllers.values.max(by: { $0.seqId < $1.seqId }) else { return }
@@ -221,7 +221,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func closeDiff() {
-        guard let splitTree = workspaceWindowController?.getSplitTree() else { return }
+        guard let splitTree = sessionWindowController?.getSplitTree() else { return }
 
         // Unmaximize first if maximized
         if splitTree.isMaximized {
@@ -284,14 +284,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         var current: NSView? = firstResponder
         while let view = current {
-            if let paneVC = workspaceWindowController?.getSplitTree()?
+            if let paneVC = sessionWindowController?.getSplitTree()?
                 .paneControllers.values.first(where: { $0.view == view || $0.view.isDescendant(of: view) || view.isDescendant(of: $0.view) }) {
                 return paneVC
             }
             current = view.superview
         }
 
-        return workspaceWindowController?.getSplitTree()?.paneControllers.values.first
+        return sessionWindowController?.getSplitTree()?.paneControllers.values.first
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {

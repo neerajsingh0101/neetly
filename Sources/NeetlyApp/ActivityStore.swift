@@ -10,16 +10,16 @@ struct Activity: Codable, Identifiable {
     var prState: String?
 
     enum Kind: String, Codable {
-        case workspaceCreated
-        case workspaceDeleted
+        case sessionCreated
+        case sessionDeleted
         case prOpened
     }
 
     var description: String {
         switch kind {
-        case .workspaceCreated:
+        case .sessionCreated:
             return "Created session \(detail) for repo \(repoName)."
-        case .workspaceDeleted:
+        case .sessionDeleted:
             return "Deleted session \(detail) from repo \(repoName)."
         case .prOpened:
             let state = prState.map { " (\($0))" } ?? ""

@@ -2,7 +2,7 @@ import Foundation
 
 /// Resolves GitHub PR status for a worktree using the `gh` CLI.
 /// Tries three strategies: branch tracking, head branch match, then commit SHA match.
-/// Merged/closed PRs only attach if the workspace HEAD matches the PR's head commit.
+/// Merged/closed PRs only attach if the session HEAD matches the PR's head commit.
 class GitHubPRResolver {
 
     static func resolve(worktreePath: String, completion: @escaping (GitHubPRInfo?) -> Void) {
