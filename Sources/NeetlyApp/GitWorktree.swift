@@ -247,17 +247,36 @@ class GitWorktree {
             return .success(path: worktreePath)
         }
 
+        // `git worktree add` registers the worktree before running post-checkout
+        // hooks. A broken hook (e.g., a husky install pointing at a missing
+        // husky.sh) returns non-zero from the hook even though the worktree is
+        // fully set up. Verify against `git worktree list` — if it's already
+        // there, we'd just hit "already exists" in the recovery path below.
+        if isRegisteredWorktree(worktreePath) {
+            NSLog("GitWorktree: cmd1 exited non-zero but worktree is registered; treating as success")
+            runPostCreateCommand(at: worktreePath)
+            return .success(path: worktreePath)
+        }
+
         // Branch might already exist — try without -b
         let cmd2 = "git worktree add '\(worktreePath)' '\(branchName)'"
         let result2 = shell(cmd2, in: repoPath)
         NSLog("GitWorktree: \(cmd2) → \(result2)")
 
-        if result2.success {
+        if result2.success || isRegisteredWorktree(worktreePath) {
             runPostCreateCommand(at: worktreePath)
             return .success(path: worktreePath)
         }
 
         return .failure(message: "Failed: \(result1.output) / \(result2.output)")
+    }
+
+    private func isRegisteredWorktree(_ path: String) -> Bool {
+        let result = shell("git worktree list --porcelain", in: repoPath)
+        guard result.success else { return false }
+        return result.output.split(separator: "\n").contains { line in
+            line == "worktree \(path)"
+        }
     }
 
     /// Run the user-configured post-create command (Settings → Post-Create

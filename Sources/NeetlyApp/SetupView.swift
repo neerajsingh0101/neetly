@@ -325,7 +325,10 @@ struct AddRepoScreen: View {
             }
 
             if let error = errorMessage {
-                Text(error).foregroundColor(.red).font(.caption)
+                Text(error)
+                    .foregroundColor(.red)
+                    .font(.caption)
+                    .textSelection(.enabled)
             }
 
             HStack {
@@ -441,6 +444,7 @@ struct SessionNameScreen: View {
                     .font(.system(size: 20))
                     .foregroundColor(.red)
                     .fixedSize(horizontal: false, vertical: true)
+                    .textSelection(.enabled)
             }
 
             HStack {
