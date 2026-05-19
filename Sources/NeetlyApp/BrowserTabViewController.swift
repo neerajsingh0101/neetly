@@ -249,6 +249,29 @@ class BrowserTabViewController: NSViewController, WKNavigationDelegate, WKUIDele
         return newWebView
     }
 
+    /// Show an NSOpenPanel when the page triggers `<input type="file">`.
+    /// WKWebView has no built-in file picker — without this delegate method,
+    /// clicking a file input is silently a no-op.
+    func webView(_ webView: WKWebView,
+                 runOpenPanelWith parameters: WKOpenPanelParameters,
+                 initiatedByFrame frame: WKFrameInfo,
+                 completionHandler: @escaping ([URL]?) -> Void) {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = true
+        panel.canChooseDirectories = parameters.allowsDirectories
+        panel.allowsMultipleSelection = parameters.allowsMultipleSelection
+
+        let window = webView.window ?? view.window
+        let handler: (NSApplication.ModalResponse) -> Void = { response in
+            completionHandler(response == .OK ? panel.urls : nil)
+        }
+        if let window = window {
+            panel.beginSheetModal(for: window, completionHandler: handler)
+        } else {
+            handler(panel.runModal())
+        }
+    }
+
     /// Build a short tab title: first two words of the page title, or the hostname.
     private func shortTitle(from title: String?, url: URL?) -> String {
         if let title = title, !title.isEmpty {
