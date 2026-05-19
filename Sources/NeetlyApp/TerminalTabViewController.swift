@@ -27,7 +27,7 @@ class TerminalTabViewController: NSViewController, LocalProcessTerminalViewDeleg
     required init?(coder: NSCoder) { fatalError() }
 
     override func loadView() {
-        terminalView = LocalProcessTerminalView(frame: NSRect(x: 0, y: 0, width: 800, height: 600))
+        terminalView = NeetlyTerminalView(frame: NSRect(x: 0, y: 0, width: 800, height: 600))
         terminalView.autoresizingMask = [.width, .height]
 
         let config = TerminalConfig.load()
