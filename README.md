@@ -44,6 +44,25 @@ ln -sf $(pwd)/.build/arm64-apple-macosx/debug/neetly /usr/local/bin/neetly
 swift run neetly-app
 ```
 
+## Resetting to the default settings
+
+Neetly's default settings — the worktree directory, the diff command, and the
+post-create command — are baked into the app. If you installed Neetly earlier,
+your `~/.config/neetly/settings.json` still holds whatever values were current
+back then, so newer defaults don't apply on their own.
+
+To adopt the current defaults, update to the latest Neetly release, then delete
+the settings file and restart the app:
+
+```bash
+rm ~/.config/neetly/settings.json
+```
+
+This resets only the settings file. `repos.json`, `sessions.json`, and
+`activities.json` are left untouched, so your repos, open sessions, and history
+are preserved. Existing worktrees also stay where they are — only worktrees
+created after the reset use the new worktree directory.
+
 ## Tech Stack
 
 <p>
@@ -57,7 +76,7 @@ swift run neetly-app
 
 ## Viewinig the diff
 
-* Cmd+1 is configured to show you the diff by executing `lazygit`. If you want to use a different tool for the diff
+* Cmd+1 is configured to show you the diff by executing `git diff`. If you want to use a different tool for the diff
   then you can configure it in **Settings**.
 * After viewing the diff you can close the diff by executing Cmd+2.
 * Here is what Cmd+1 does: opens a new terminal in the right most pane. Executes the **diff command** specified in the **Settings**. Hits Cmd+Shift+m to maximize the window.
@@ -216,10 +235,12 @@ All fields are optional — omit any to use the default. The config is read when
   **Debugging browser tabs with Safari's Web Inspector**: neetly enables `isInspectable` on all browser tabs, so you can use Safari's full Web Inspector (DOM, console, network, breakpoints) against them. One-time setup: Safari → Settings → Advanced → check "Show features for web developers". Then in Safari → Develop → (your Mac name), you'll see all of neetly's open browser tabs listed. Click one to attach the inspector.
 - **IPC**: Unix domain socket at `/tmp/neetly-<pid>.sock`
 - **Persistence**:
+  - `~/.config/neetly/settings.json` — worktree directory, diff command, and post-create command
   - `~/.config/neetly/repos.json` — list of added repos and their default layouts
   - `~/.config/neetly/sessions.json` — open sessions, restored on relaunch
+  - `~/.config/neetly/activities.json` — activity history (PRs opened, etc.)
   - `~/.config/neetly/terminal.json` — terminal font and color overrides
-  - `~/neetly/<repo-name>/<session-name>` — git worktrees are created here, one per session
+  - `~/code/neetly-worktrees/<repo-name>/<branch-name>` — git worktrees are created here, one per session (the base directory is configurable in **Settings**)
 - **File watcher**: WKWebView (WebKit) does not support HMR (Hot Module Replacement) the way Chrome's DevTools protocol does, so neetly polls the repo every 2 seconds for changes to JavaScript/React/CSS files and triggers a browser reload when anything changes.
 
 # FAQ

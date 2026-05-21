@@ -21,7 +21,8 @@ class NeetlySettings {
     }
 
     static var defaultWorktreeBaseDir: String {
-        FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("neetly-worktrees").path
+        FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent("code/neetly-worktrees").path
     }
 
     var worktreeBaseDir: String {
@@ -34,7 +35,7 @@ class NeetlySettings {
         save(s)
     }
 
-    static let defaultDiffCommand = "lazygit"
+    static let defaultDiffCommand = "git diff"
 
     var diffCommand: String {
         load().diffCommand ?? Self.defaultDiffCommand
@@ -46,8 +47,10 @@ class NeetlySettings {
         save(s)
     }
 
+    static let defaultPostWorktreeCreateCommand = "mise trust $WORKTREE_DIRECTORY"
+
     var postWorktreeCreateCommand: String {
-        load().postWorktreeCreateCommand ?? ""
+        load().postWorktreeCreateCommand ?? Self.defaultPostWorktreeCreateCommand
     }
 
     func setPostWorktreeCreateCommand(_ command: String) {

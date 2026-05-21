@@ -160,7 +160,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         paneMenu.addItem(withTitle: "Maximize / Restore", action: #selector(toggleMaximize), keyEquivalent: "m")
         paneMenu.items.last?.keyEquivalentModifierMask = [.command, .shift]
         paneMenu.addItem(.separator())
-        paneMenu.addItem(withTitle: "Diff (lazygit)", action: #selector(openDiff), keyEquivalent: "1")
+        paneMenu.addItem(withTitle: "Diff", action: #selector(openDiff), keyEquivalent: "1")
         paneMenu.addItem(withTitle: "Close Diff", action: #selector(closeDiff), keyEquivalent: "2")
         paneMenu.addItem(.separator())
         paneMenu.addItem(withTitle: "Next Tab", action: #selector(nextTab), keyEquivalent: "]")
@@ -228,7 +228,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             splitTree.toggleMaximizeForActivePane()
         }
 
-        // Close the active tab (kills the lazygit process cleanly)
+        // Close the active tab (kills the diff process cleanly)
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
             if let pane = self?.findFocusedPane() {
                 pane.closeActiveTab()
