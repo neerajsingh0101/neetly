@@ -2,39 +2,17 @@
 set -euo pipefail
 
 VERSION="${1:-1.0.0}"
-VARIANT="${2:-stable}"
 
 echo "==> Building release..."
 swift build -c release
 
 BUILD_DIR=".build/arm64-apple-macosx/release"
-
-# Stable and beta differ only in bundle identity, update feed, and terminal
-# engine — so the beta installs side-by-side with a tester's stable Neetly.
-if [ "$VARIANT" = "beta" ]; then
-    APP_NAME="Neetly Beta"
-    BUNDLE_ID="com.neetly.app.beta"
-    DISPLAY_NAME="Neetly Beta"
-    DMG_NAME="neetly-beta-macos.dmg"
-    VOL_NAME="Neetly Beta"
-    FEED_URL="https://github.com/neetozone/neetly/releases/download/beta/appcast-beta.xml"
-elif [ "$VARIANT" = "stable" ]; then
-    APP_NAME="neetly"
-    BUNDLE_ID="com.neetly.app"
-    DISPLAY_NAME="neetly"
-    DMG_NAME="neetly-macos.dmg"
-    VOL_NAME="neetly"
-    FEED_URL="https://github.com/neetozone/neetly/releases/latest/download/appcast.xml"
-else
-    echo "ERROR: unknown variant '$VARIANT' (expected 'stable' or 'beta')" >&2
-    exit 1
-fi
-
-APP_DIR=".build/${APP_NAME}.app"
+APP_DIR=".build/neetly.app"
+DMG_NAME="neetly-macos.dmg"
 FRAMEWORKS_DIR="$APP_DIR/Contents/Frameworks"
 SPARKLE_FRAMEWORK=$(find .build -name "Sparkle.framework" -type d 2>/dev/null | head -1)
 
-echo "==> Creating ${APP_NAME}.app bundle..."
+echo "==> Creating .app bundle..."
 rm -rf "$APP_DIR"
 mkdir -p "$APP_DIR/Contents/MacOS"
 mkdir -p "$APP_DIR/Contents/Resources"
@@ -85,11 +63,11 @@ cat > "$APP_DIR/Contents/Info.plist" << PLIST
     <key>CFBundleIconFile</key>
     <string>AppIcon</string>
     <key>CFBundleIdentifier</key>
-    <string>${BUNDLE_ID}</string>
+    <string>com.neetly.app</string>
     <key>CFBundleName</key>
-    <string>${DISPLAY_NAME}</string>
+    <string>neetly</string>
     <key>CFBundleDisplayName</key>
-    <string>${DISPLAY_NAME}</string>
+    <string>neetly</string>
     <key>CFBundleVersion</key>
     <string>${VERSION}</string>
     <key>CFBundleShortVersionString</key>
@@ -108,7 +86,7 @@ cat > "$APP_DIR/Contents/Info.plist" << PLIST
         <true/>
     </dict>
     <key>SUFeedURL</key>
-    <string>${FEED_URL}</string>
+    <string>https://github.com/neetozone/neetly/releases/latest/download/appcast.xml</string>
     <key>SUPublicEDKey</key>
     <string>L0ljaNTkCDOrcaLiMg8NIPHt+XLj5dr+Fp4dZ9AmsR8=</string>
     <key>SUEnableAutomaticChecks</key>
@@ -125,7 +103,7 @@ codesign --force --deep --sign - "$APP_DIR"
 
 echo "==> Creating DMG..."
 rm -f "$DMG_NAME"
-hdiutil create -volname "$VOL_NAME" \
+hdiutil create -volname "neetly" \
     -srcfolder "$APP_DIR" \
     -ov -format UDZO \
     "$DMG_NAME"
