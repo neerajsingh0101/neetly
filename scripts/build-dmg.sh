@@ -18,9 +18,6 @@ if [ "$VARIANT" = "beta" ]; then
     DMG_NAME="neetly-beta-macos.dmg"
     VOL_NAME="Neetly Beta"
     FEED_URL="https://github.com/neetozone/neetly/releases/download/beta/appcast-beta.xml"
-    ENGINE_PLIST="    <key>NeetlyTerminalEngine</key>
-    <string>ghostty</string>
-"
 elif [ "$VARIANT" = "stable" ]; then
     APP_NAME="neetly"
     BUNDLE_ID="com.neetly.app"
@@ -28,7 +25,6 @@ elif [ "$VARIANT" = "stable" ]; then
     DMG_NAME="neetly-macos.dmg"
     VOL_NAME="neetly"
     FEED_URL="https://github.com/neetozone/neetly/releases/latest/download/appcast.xml"
-    ENGINE_PLIST=""
 else
     echo "ERROR: unknown variant '$VARIANT' (expected 'stable' or 'beta')" >&2
     exit 1
@@ -111,7 +107,7 @@ cat > "$APP_DIR/Contents/Info.plist" << PLIST
         <key>NSAllowsArbitraryLoads</key>
         <true/>
     </dict>
-${ENGINE_PLIST}    <key>SUFeedURL</key>
+    <key>SUFeedURL</key>
     <string>${FEED_URL}</string>
     <key>SUPublicEDKey</key>
     <string>L0ljaNTkCDOrcaLiMg8NIPHt+XLj5dr+Fp4dZ9AmsR8=</string>

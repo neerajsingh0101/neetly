@@ -19,19 +19,13 @@ enum TerminalEngine {
     case swiftTerm
     case ghostty
 
-    /// Resolution order: the `NEETLY_TERMINAL` env var (dev / dogfooding)
-    /// wins; then the bundled `NeetlyTerminalEngine` Info.plist key — how the
-    /// beta build opts in; else SwiftTerm, so the public build is unchanged.
+    /// libghostty is the engine for all builds. `NEETLY_TERMINAL=swiftterm`
+    /// is an escape hatch back to the legacy SwiftTerm renderer, kept in case
+    /// a ghostty problem turns up in the field.
     static let current: TerminalEngine = {
-        switch ProcessInfo.processInfo.environment["NEETLY_TERMINAL"]?.lowercased() {
-        case "ghostty": return .ghostty
-        case "swiftterm": return .swiftTerm
-        default: break
+        if ProcessInfo.processInfo.environment["NEETLY_TERMINAL"]?.lowercased() == "swiftterm" {
+            return .swiftTerm
         }
-        if let bundled = Bundle.main.object(forInfoDictionaryKey: "NeetlyTerminalEngine") as? String,
-           bundled.lowercased() == "ghostty" {
-            return .ghostty
-        }
-        return .swiftTerm
+        return .ghostty
     }()
 }

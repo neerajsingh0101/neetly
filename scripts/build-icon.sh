@@ -1,20 +1,15 @@
 #!/bin/bash
 set -euo pipefail
 
-# Build the macOS app icon (.icns) from docs/assets/logo.svg
-# Requires: rsvg-convert (brew install librsvg), iconutil (macOS built-in)
+# Build the macOS app icon (.icns) from docs/assets/icon.png.
+# Uses sips + iconutil, both built into macOS — no extra tooling needed.
 
-SVG="docs/assets/logo.svg"
+SOURCE="docs/assets/icon.png"
 ICONSET="scripts/AppIcon.iconset"
 OUTPUT="Sources/NeetlyApp/Resources/AppIcon.icns"
 
-if [ ! -f "$SVG" ]; then
-    echo "Error: $SVG not found"
-    exit 1
-fi
-
-if ! command -v rsvg-convert >/dev/null 2>&1; then
-    echo "Error: rsvg-convert not installed. Run: brew install librsvg"
+if [ ! -f "$SOURCE" ]; then
+    echo "Error: $SOURCE not found"
     exit 1
 fi
 
@@ -22,7 +17,7 @@ rm -rf "$ICONSET"
 mkdir -p "$ICONSET"
 
 # macOS icons need these sizes: 16, 32, 64, 128, 256, 512, 1024
-# with @1x and @2x variants
+# with @1x and @2x variants.
 sizes=(
     "16:icon_16x16.png"
     "32:icon_16x16@2x.png"
@@ -40,7 +35,7 @@ for entry in "${sizes[@]}"; do
     size="${entry%%:*}"
     name="${entry##*:}"
     echo "Rendering $name at ${size}x${size}"
-    rsvg-convert -w "$size" -h "$size" "$SVG" -o "$ICONSET/$name"
+    sips -z "$size" "$size" "$SOURCE" --out "$ICONSET/$name" >/dev/null
 done
 
 echo "Packaging .icns..."
