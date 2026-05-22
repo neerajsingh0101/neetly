@@ -1,5 +1,6 @@
 import AppKit
 import GhosttyTerminal
+import GhosttyTheme
 
 /// libghostty-backed terminal tab — a drop-in alternative to the SwiftTerm
 /// `TerminalTabViewController`, selected by `TerminalEngine.current`.
@@ -29,14 +30,35 @@ final class GhosttyTerminalTabViewController: NSViewController, TerminalTab {
         return TerminalConfiguration { builder in
             builder.withFontFamily(cfg.fontFamily ?? "JetBrains Mono")
             builder.withFontSize(Float(cfg.fontSize ?? 17))
-            if let bg = cfg.backgroundColor { builder.withBackground(bg) }
-            if let fg = cfg.foregroundColor { builder.withForeground(fg) }
-            if let sel = cfg.selectionColor { builder.withSelectionBackground(sel) }
-            // Neetly tints links by overriding ANSI palette blue (4) and
-            // bright blue (12) — the same indices its OSC-4 trick used.
-            if let link = cfg.linkColor {
-                builder.withPalette(4, color: link)
-                builder.withPalette(12, color: link)
+            if let themeName = cfg.theme,
+               let theme = GhosttyThemeCatalog.theme(named: themeName) {
+                // A picked theme owns every color. Theme hex values are bare
+                // ("1e1e2e"); ghostty config wants a leading "#".
+                func hex(_ value: String) -> String {
+                    value.hasPrefix("#") ? value : "#" + value
+                }
+                builder.withBackground(hex(theme.background))
+                builder.withForeground(hex(theme.foreground))
+                if let cursor = theme.cursorColor { builder.withCursorColor(hex(cursor)) }
+                if let cursorText = theme.cursorText { builder.withCursorText(hex(cursorText)) }
+                if let selBg = theme.selectionBackground { builder.withSelectionBackground(hex(selBg)) }
+                if let selFg = theme.selectionForeground { builder.withSelectionForeground(hex(selFg)) }
+                for index in theme.palette.keys.sorted() {
+                    if let color = theme.palette[index] {
+                        builder.withPalette(index, color: hex(color))
+                    }
+                }
+            } else {
+                // No theme picked — the explicit terminal.json colors.
+                if let bg = cfg.backgroundColor { builder.withBackground(bg) }
+                if let fg = cfg.foregroundColor { builder.withForeground(fg) }
+                if let sel = cfg.selectionColor { builder.withSelectionBackground(sel) }
+                // Tint links by overriding ANSI palette blue (4) and bright
+                // blue (12) — the indices Neetly's OSC-4 trick used.
+                if let link = cfg.linkColor {
+                    builder.withPalette(4, color: link)
+                    builder.withPalette(12, color: link)
+                }
             }
             // Advertise the universally-installed `xterm-256color` terminfo
             // entry rather than ghostty's own `xterm-ghostty`, so
@@ -50,9 +72,17 @@ final class GhosttyTerminalTabViewController: NSViewController, TerminalTab {
 
     /// Re-reads `terminal.json` and live-applies it to every open ghostty
     /// terminal (and tabs created afterward). Call after the user changes
-    /// terminal appearance in Settings.
+    /// terminal appearance in Settings or picks a theme.
+    ///
+    /// Uses `updateConfigSource` rather than `setTerminalConfiguration`: the
+    /// latter merges the config over a base config, yielding duplicate keys
+    /// that ghostty's parser can reject. This pushes one clean config and
+    /// updates every open surface directly.
     static func reloadConfiguration() {
-        sharedController.setTerminalConfiguration(makeConfiguration())
+        sharedController.updateConfigSource(.generated(makeConfiguration().rendered))
+        if let issue = sharedController.lastConfigurationIssue {
+            NSLog("[neetly] terminal config rejected: \(issue)")
+        }
     }
 
     init(command: String, repoPath: String, environment: [String: String]) {

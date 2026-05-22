@@ -1,4 +1,5 @@
 import AppKit
+import SwiftUI
 
 /// Holds the runtime state for one session.
 class Session {
@@ -177,6 +178,8 @@ class SessionTabBar: NSView {
     private var tabViews: [NSView] = []
     private var detailViews: [NSView] = []
     private let plusButton = NSButton()
+    private let themeButton = NSButton()
+    private var themePopover: NSPopover?
     private var activeStatusColor: NSColor?
     private static let tabRowHeight: CGFloat = 40
     static let detailRowHeight: CGFloat = 33
@@ -194,6 +197,24 @@ class SessionTabBar: NSView {
         plusButton.action = #selector(plusClicked)
         plusButton.frame = NSRect(x: 0, y: 0, width: 28, height: 24)
         addSubview(plusButton)
+
+        // Theme palette — pinned to the far-right edge, level with the plus
+        // button (positioned in layout()). A theme is a global setting, so it
+        // sits apart from the per-session tabs rather than scrolling with them.
+        themeButton.image = NSImage(systemSymbolName: "paintpalette", accessibilityDescription: "Themes")
+        themeButton.toolTip = "Terminal Theme"
+        themeButton.bezelStyle = .recessed
+        themeButton.imagePosition = .imageOnly
+        themeButton.target = self
+        themeButton.action = #selector(themeClicked)
+        themeButton.frame = NSRect(x: 0, y: 41, width: 28, height: 24)
+        addSubview(themeButton)
+    }
+
+    override func layout() {
+        super.layout()
+        // Keep the theme button glued to the far-right edge as the bar resizes.
+        themeButton.frame.origin.x = bounds.width - themeButton.frame.width - 8
     }
 
     @available(*, unavailable)
@@ -235,6 +256,9 @@ class SessionTabBar: NSView {
         plusButton.frame.origin.x = x
         plusButton.frame.origin.y = tabRowY + 8
         addSubview(plusButton)
+
+        // Keep the theme button above the (re-added) tabs and plus button.
+        addSubview(themeButton, positioned: .above, relativeTo: nil)
 
         // -- Detail row (full width, for active session's SHA + PR) --
         guard let active = sessions.first(where: { $0.isActive }) else {
@@ -359,6 +383,15 @@ class SessionTabBar: NSView {
 
     @objc private func plusClicked() {
         onNewSession?()
+    }
+
+    @objc private func themeClicked() {
+        let popover = NSPopover()
+        popover.behavior = .transient
+        popover.contentSize = NSSize(width: 320, height: 460)
+        popover.contentViewController = NSHostingController(rootView: ThemePickerView())
+        popover.show(relativeTo: themeButton.bounds, of: themeButton, preferredEdge: .minY)
+        themePopover = popover
     }
 
     static let activeTabColor = NSColor(red: 30/255, green: 30/255, blue: 46/255, alpha: 1.0)
