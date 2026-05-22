@@ -10,6 +10,9 @@ struct TerminalConfig: Codable {
     var scrollback: Int?
     var theme: String?
 
+    /// The theme every install gets until the user picks another one.
+    static let defaultThemeName = "Catppuccin Mocha"
+
     static let `default` = TerminalConfig(
         fontFamily: nil,
         fontSize: 17,
@@ -18,16 +21,19 @@ struct TerminalConfig: Codable {
         selectionColor: "#635b70",
         linkColor: "#8bb8fa",
         scrollback: 10000,
-        theme: nil
+        theme: defaultThemeName
     )
 
     static func load() -> TerminalConfig {
         let home = FileManager.default.homeDirectoryForCurrentUser
         let configFile = home.appendingPathComponent(".config/neetly/terminal.json")
         guard let data = try? Data(contentsOf: configFile),
-              let config = try? JSONDecoder().decode(TerminalConfig.self, from: data) else {
+              var config = try? JSONDecoder().decode(TerminalConfig.self, from: data) else {
             return .default
         }
+        // Installs that predate theming have no theme set — give them the
+        // default too, until they pick their own.
+        if config.theme == nil { config.theme = defaultThemeName }
         return config
     }
 

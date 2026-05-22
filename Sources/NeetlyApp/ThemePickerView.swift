@@ -52,6 +52,7 @@ struct ThemePickerView: View {
         if TerminalEngine.current == .ghostty {
             GhosttyTerminalTabViewController.reloadConfiguration()
         }
+        NotificationCenter.default.post(name: .neetlyThemeChanged, object: nil)
     }
 }
 

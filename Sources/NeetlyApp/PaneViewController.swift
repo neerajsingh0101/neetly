@@ -28,10 +28,29 @@ class PaneViewController: NSViewController {
         self.repoPath = repoPath
         self.socketServer = socketServer
         super.init(nibName: nil, bundle: nil)
+        NotificationCenter.default.addObserver(
+            self, selector: #selector(themeChanged),
+            name: .neetlyThemeChanged, object: nil
+        )
     }
 
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError() }
+
+    /// Paints the pane background from the picked theme, so the area around
+    /// the terminal matches when the window isn't filled by terminal pixels.
+    private func applyChromeTheme() {
+        guard isViewLoaded else { return }
+        let bg = (ChromeTheme.current?.background ?? .windowBackgroundColor).cgColor
+        view.layer?.backgroundColor = bg
+        contentView.layer?.backgroundColor = bg
+    }
+
+    @objc private func themeChanged() {
+        applyChromeTheme()
+        tabBar.applyChromeTheme()
+        refreshTabBar()
+    }
 
     override func loadView() {
         let container = NSView()
@@ -62,6 +81,7 @@ class PaneViewController: NSViewController {
         container.addSubview(tabBar)
 
         contentView.translatesAutoresizingMaskIntoConstraints = false
+        contentView.wantsLayer = true
         container.addSubview(contentView)
 
         NSLayoutConstraint.activate([
@@ -77,6 +97,7 @@ class PaneViewController: NSViewController {
         ])
 
         view = container
+        applyChromeTheme()
     }
 
     // MARK: - Tab Management

@@ -19,7 +19,6 @@ class TabBarView: NSView {
     override init(frame: NSRect) {
         super.init(frame: frame)
         wantsLayer = true
-        layer?.backgroundColor = NSColor.controlBackgroundColor.cgColor
 
         // "+Terminal" button — right-aligned
         newTerminalButton.title = ">_"
@@ -97,10 +96,24 @@ class TabBarView: NSView {
             newTerminalButton.widthAnchor.constraint(equalToConstant: 26),
             newTerminalButton.heightAnchor.constraint(equalToConstant: 20),
         ])
+
+        applyChromeTheme()
     }
 
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError() }
+
+    /// Paints the bar background and tints the action buttons from the picked
+    /// theme. Called at the end of init and on `.neetlyThemeChanged`.
+    func applyChromeTheme() {
+        let theme = ChromeTheme.current
+        layer?.backgroundColor = (theme?.background ?? .controlBackgroundColor).cgColor
+        let accent = theme?.accent ?? .controlAccentColor
+        for btn in [newTerminalButton, newBrowserButton, splitColButton, splitRowButton, maximizeButton] {
+            btn.contentTintColor = accent
+        }
+        needsDisplay = true
+    }
 
     func update(tabs: [(title: String, icon: NSImage?, isActive: Bool)]) {
         buttons.forEach { $0.removeFromSuperview() }
@@ -154,7 +167,7 @@ class TabBarView: NSView {
     override func draw(_ dirtyRect: NSRect) {
         super.draw(dirtyRect)
         // Bottom border
-        NSColor.separatorColor.setFill()
+        (ChromeTheme.current?.border ?? NSColor.separatorColor).setFill()
         NSRect(x: 0, y: 0, width: bounds.width, height: 1).fill()
     }
 }
@@ -178,21 +191,23 @@ private class TabButton: NSView {
         wantsLayer = true
         layer?.cornerRadius = 4
 
+        let theme = ChromeTheme.current
         if isActive {
-            layer?.backgroundColor = NSColor.controlAccentColor.withAlphaComponent(0.15).cgColor
+            let activeColor = (theme?.accent ?? .controlAccentColor).withAlphaComponent(0.15)
+            layer?.backgroundColor = activeColor.cgColor
         } else {
             layer?.backgroundColor = NSColor.clear.cgColor
         }
 
-        // Icon
+        // Icon — keep template SF Symbols template-y (don't rasterize via
+        // lockFocus) so contentTintColor takes effect; favicons (non-template)
+        // render as-is.
         var x: CGFloat = 6
         if let icon = icon {
             let iconView = NSImageView(frame: NSRect(x: x, y: 5, width: 14, height: 14))
-            let resized = NSImage(size: NSSize(width: 14, height: 14))
-            resized.lockFocus()
-            icon.draw(in: NSRect(x: 0, y: 0, width: 14, height: 14))
-            resized.unlockFocus()
-            iconView.image = resized
+            iconView.image = icon
+            iconView.imageScaling = .scaleProportionallyDown
+            iconView.contentTintColor = theme?.foreground ?? .labelColor
             addSubview(iconView)
             x += 18
         }
@@ -200,7 +215,9 @@ private class TabButton: NSView {
         // Title
         let label = NSTextField(labelWithString: title)
         label.font = .systemFont(ofSize: 11, weight: isActive ? .semibold : .regular)
-        label.textColor = .labelColor
+        label.textColor = isActive
+            ? (theme?.foreground ?? .labelColor)
+            : (theme?.mutedForeground ?? .secondaryLabelColor)
         label.lineBreakMode = .byTruncatingTail
         label.frame = NSRect(x: x, y: 4, width: 90, height: 16)
         addSubview(label)
@@ -209,6 +226,7 @@ private class TabButton: NSView {
         closeBtn.image = NSImage(systemSymbolName: "xmark", accessibilityDescription: "Close tab")
         closeBtn.imagePosition = .imageOnly
         closeBtn.isBordered = false
+        closeBtn.contentTintColor = theme?.mutedForeground ?? .secondaryLabelColor
         closeBtn.target = self
         closeBtn.action = #selector(closeClicked)
         closeBtn.imageScaling = .scaleProportionallyDown

@@ -187,7 +187,7 @@ class SessionTabBar: NSView {
     override init(frame: NSRect) {
         super.init(frame: frame)
         wantsLayer = true
-        layer?.backgroundColor = NSColor.windowBackgroundColor.cgColor
+        applyChromeTheme()
 
         plusButton.title = "+"
         plusButton.toolTip = "New Session"
@@ -271,6 +271,9 @@ class SessionTabBar: NSView {
 
         let detailFont = NSFont.monospacedSystemFont(ofSize: 14, weight: .regular)
         let detailBoldFont = NSFont.monospacedDigitSystemFont(ofSize: 14, weight: .medium)
+        // SHA text color — theme-derived, else Catppuccin Overlay0.
+        let detailMuted = ChromeTheme.current?.mutedForeground
+            ?? NSColor(red: 0x6c/255, green: 0x70/255, blue: 0x86/255, alpha: 1)
         let itemHeight: CGFloat = 20
         let centerY: CGFloat = (Self.detailRowHeight - itemHeight) / 2
 
@@ -279,8 +282,7 @@ class SessionTabBar: NSView {
             if let urlStr = active.commitURL, let url = URL(string: urlStr) {
                 let attr = NSAttributedString(string: sha, attributes: [
                     .font: detailFont,
-                    // Catppuccin Mocha: Overlay0 #6c7086
-                    .foregroundColor: NSColor(red: 0x6c/255, green: 0x70/255, blue: 0x86/255, alpha: 1),
+                    .foregroundColor: detailMuted,
                 ])
                 let btn = NSButton(frame: .zero)
                 btn.isBordered = false
@@ -297,8 +299,7 @@ class SessionTabBar: NSView {
             } else {
                 let label = NSTextField(labelWithString: sha)
                 label.font = detailFont
-                // Catppuccin Mocha: Overlay0 #6c7086
-                label.textColor = NSColor(red: 0x6c/255, green: 0x70/255, blue: 0x86/255, alpha: 1)
+                label.textColor = detailMuted
                 label.sizeToFit()
                 label.frame.origin = CGPoint(x: detailX, y: centerY)
                 label.frame.size.height = itemHeight
@@ -396,19 +397,27 @@ class SessionTabBar: NSView {
 
     static let activeTabColor = NSColor(red: 30/255, green: 30/255, blue: 46/255, alpha: 1.0)
 
+    /// Paints the bar background from the picked theme, or the system color
+    /// when none is set. Also re-runs `draw()` for the detail-row strip.
+    func applyChromeTheme() {
+        layer?.backgroundColor = (ChromeTheme.current?.background ?? .windowBackgroundColor).cgColor
+        needsDisplay = true
+    }
+
     override func draw(_ dirtyRect: NSRect) {
         super.draw(dirtyRect)
-        // Detail row background — same color as active tab. When the active
-        // tab carries a status color, match it (with the same alpha the tab
+        let theme = ChromeTheme.current
+        // Detail row background — same color as the active tab. When the
+        // active tab carries a status color, match it (same alpha the tab
         // uses) so the strip visually merges with the active tab.
         if let color = activeStatusColor {
             color.withAlphaComponent(0.45).setFill()
         } else {
-            Self.activeTabColor.setFill()
+            (theme?.activeBackground ?? Self.activeTabColor).setFill()
         }
         NSRect(x: 0, y: 1, width: bounds.width, height: Self.detailRowHeight - 1).fill()
         // Bottom border
-        NSColor.separatorColor.setFill()
+        (theme?.border ?? NSColor.separatorColor).setFill()
         NSRect(x: 0, y: 0, width: bounds.width, height: 1).fill()
     }
 }
@@ -430,11 +439,12 @@ private class SessionTab: NSView {
         super.init(frame: .zero)
         wantsLayer = true
 
+        let theme = ChromeTheme.current
         layer?.cornerRadius = 6
         if let color = statusColor {
             layer?.backgroundColor = color.withAlphaComponent(0.45).cgColor
         } else if isActive {
-            layer?.backgroundColor = SessionTabBar.activeTabColor.cgColor
+            layer?.backgroundColor = (theme?.activeBackground ?? SessionTabBar.activeTabColor).cgColor
         } else {
             layer?.backgroundColor = NSColor.clear.cgColor
         }
@@ -448,18 +458,19 @@ private class SessionTab: NSView {
         let repoY: CGFloat = 20
         let wsY: CGFloat = 4
 
-        let hasStatusColor = statusColor != nil
+        let primaryText = theme?.foreground ?? .labelColor
+        let secondaryText = theme?.mutedForeground ?? .secondaryLabelColor
+
         let repoLabel = NSTextField(labelWithString: repoName)
         repoLabel.font = .systemFont(ofSize: 10)
-        repoLabel.textColor = hasStatusColor ? .black.withAlphaComponent(0.6) : isActive ? NSColor(red: 0xa6/255, green: 0xad/255, blue: 0xc8/255, alpha: 1) : .secondaryLabelColor
+        repoLabel.textColor = secondaryText
         repoLabel.lineBreakMode = .byTruncatingTail
         repoLabel.frame = NSRect(x: 8, y: repoY, width: 140, height: 14)
         addSubview(repoLabel)
 
         let wsLabel = NSTextField(labelWithString: sessionName)
         wsLabel.font = .systemFont(ofSize: 14, weight: isActive ? .semibold : .regular)
-        // Catppuccin Mocha: Text #cdd6f4
-        wsLabel.textColor = hasStatusColor ? .black : isActive ? NSColor(red: 0xcd/255, green: 0xd6/255, blue: 0xf4/255, alpha: 1) : .labelColor
+        wsLabel.textColor = isActive ? primaryText : secondaryText
         wsLabel.lineBreakMode = .byTruncatingTail
         wsLabel.frame = NSRect(x: 8, y: wsY, width: 140, height: 17)
         addSubview(wsLabel)
@@ -467,7 +478,7 @@ private class SessionTab: NSView {
         closeBtn.image = NSImage(systemSymbolName: "xmark", accessibilityDescription: "Detach session")
         closeBtn.imagePosition = .imageOnly
         closeBtn.isBordered = false
-        closeBtn.contentTintColor = hasStatusColor ? .black.withAlphaComponent(0.6) : isActive ? NSColor(red: 0xa6/255, green: 0xad/255, blue: 0xc8/255, alpha: 1) : .secondaryLabelColor
+        closeBtn.contentTintColor = secondaryText
         closeBtn.target = self
         closeBtn.action = #selector(closeClicked)
         closeBtn.imageScaling = .scaleProportionallyDown
@@ -551,10 +562,38 @@ class SessionWindowController: NSWindowController {
         window.setFrameAutosaveName("SessionWindow")
         super.init(window: window)
         setupLayout()
+        applyWindowTheme()
+        NotificationCenter.default.addObserver(
+            self, selector: #selector(themeChanged),
+            name: .neetlyThemeChanged, object: nil
+        )
     }
 
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError() }
+
+    /// Themes the window — titlebar, background, light/dark appearance — to
+    /// match the picked terminal theme, or restores the system look.
+    private func applyWindowTheme() {
+        guard let window else { return }
+        if let theme = ChromeTheme.current {
+            window.appearance = NSAppearance(named: theme.isDark ? .darkAqua : .aqua)
+            window.titlebarAppearsTransparent = true
+            window.backgroundColor = theme.background
+            contentArea.layer?.backgroundColor = theme.background.cgColor
+        } else {
+            window.appearance = nil
+            window.titlebarAppearsTransparent = false
+            window.backgroundColor = .windowBackgroundColor
+            contentArea.layer?.backgroundColor = NSColor.windowBackgroundColor.cgColor
+        }
+    }
+
+    @objc private func themeChanged() {
+        applyWindowTheme()
+        sessionTabBar.applyChromeTheme()
+        refreshTabBar()
+    }
 
     private func setupLayout() {
         guard let contentView = window?.contentView else { return }
@@ -566,6 +605,7 @@ class SessionWindowController: NSWindowController {
         contentView.addSubview(sessionTabBar)
 
         contentArea.translatesAutoresizingMaskIntoConstraints = false
+        contentArea.wantsLayer = true
         contentView.addSubview(contentArea)
 
         NSLayoutConstraint.activate([

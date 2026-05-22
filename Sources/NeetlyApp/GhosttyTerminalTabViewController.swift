@@ -23,6 +23,10 @@ final class GhosttyTerminalTabViewController: NSViewController, TerminalTab {
     /// One ghostty runtime (`ghostty_app`) shared by every terminal tab.
     static let sharedController = TerminalController(configuration: makeConfiguration())
 
+    /// Every live terminal tab, weakly held — so `reloadConfiguration()` can
+    /// force each surface to repaint after a config change.
+    private static let liveInstances = NSHashTable<GhosttyTerminalTabViewController>.weakObjects()
+
     /// Builds the ghostty terminal configuration from Neetly's
     /// `~/.config/neetly/terminal.json`, so ghostty matches the app's look.
     static func makeConfiguration() -> TerminalConfiguration {
@@ -83,6 +87,12 @@ final class GhosttyTerminalTabViewController: NSViewController, TerminalTab {
         if let issue = sharedController.lastConfigurationIssue {
             NSLog("[neetly] terminal config rejected: \(issue)")
         }
+        // updateConfigSource updates each surface's config but does not
+        // trigger a redraw — an idle terminal keeps its old colors until it
+        // next renders. Nudge every open terminal to repaint now.
+        for instance in liveInstances.allObjects {
+            instance.terminalView?.fitToSize()
+        }
     }
 
     init(command: String, repoPath: String, environment: [String: String]) {
@@ -109,6 +119,7 @@ final class GhosttyTerminalTabViewController: NSViewController, TerminalTab {
             workingDirectory: repoPath
         )
         terminalView.controller = Self.sharedController
+        Self.liveInstances.add(self)
     }
 
     override func viewDidAppear() {
