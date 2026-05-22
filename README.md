@@ -69,7 +69,7 @@ created after the reset use the new worktree directory.
  <a href="https://www.swift.org/"><img src="https://img.shields.io/badge/Swift-F05138?logo=swift&logoColor=white" alt="Swift"></a>
  <a href="https://developer.apple.com/xcode/swiftui/"><img src="https://img.shields.io/badge/SwiftUI-0071E3?logo=swift&logoColor=white" alt="SwiftUI"></a>
  <a href="https://developer.apple.com/documentation/appkit"><img src="https://img.shields.io/badge/AppKit-333333?logo=apple&logoColor=white" alt="AppKit"></a>
- <a href="https://github.com/migueldeicaza/SwiftTerm"><img src="https://img.shields.io/badge/SwiftTerm-191970?logo=terminal&logoColor=white" alt="SwiftTerm"></a>
+ <a href="https://github.com/ghostty-org/ghostty"><img src="https://img.shields.io/badge/libghostty-5B2C87?logo=terminal&logoColor=white" alt="libghostty"></a>
  <a href="https://developer.apple.com/documentation/webkit/wkwebview"><img src="https://img.shields.io/badge/WKWebView-006AFF?logo=safari&logoColor=white" alt="WKWebView"></a>
  <a href="https://developer.apple.com/swift/"><img src="https://img.shields.io/badge/Swift_Package_Manager-F05138?logo=swift&logoColor=white" alt="SPM"></a>
 </p>
@@ -229,7 +229,7 @@ All fields are optional — omit any to use the default. The config is read when
 
 ## Architecture
 
-- **Terminal**: [SwiftTerm](https://github.com/migueldeicaza/SwiftTerm) (pure Swift, CPU-rendered). In the future, we could swap it for [libghostty](https://github.com/ghostty-org/ghostty) (Ghostty's Zig-based engine with Metal GPU rendering) for better performance on 4K displays and large scrollback workloads. It's a "someday maybe" note, not anything planned.
+- **Terminal**: [libghostty](https://github.com/ghostty-org/ghostty) — the embeddable terminal engine from [Ghostty](https://ghostty.org), with GPU (Metal) rendering and Ghostty's full VT emulation. Integrated via the [libghostty-spm](https://github.com/Lakr233/libghostty-spm) Swift package. neetly 1.x used [SwiftTerm](https://github.com/migueldeicaza/SwiftTerm) (pure Swift, CPU-rendered), which is still bundled as a fallback — set `NEETLY_TERMINAL=swiftterm` to use it. The [2.0 changelog](#changelog) explains the move.
 - **Browser**: [WKWebView](https://developer.apple.com/documentation/webkit/wkwebview) is Apple's native web view — the same WebKit engine that powers Safari. It's built into macOS, so neetly ships with zero browser dependencies and no extra download (unlike Electron or CEF which bundle a full Chromium). Every browser tab in neetly is a `WKWebView` embedded directly in the window.
 
   **Debugging browser tabs with Safari's Web Inspector**: neetly enables `isInspectable` on all browser tabs, so you can use Safari's full Web Inspector (DOM, console, network, breakpoints) against them. One-time setup: Safari → Settings → Advanced → check "Show features for web developers". Then in Safari → Develop → (your Mac name), you'll see all of neetly's open browser tabs listed. Click one to attach the inspector.
@@ -254,3 +254,78 @@ Please see [this](https://github.com/neetozone/neetly/blob/main/docs/wkwebview.m
 Google chrome would be nice but that is a much more heavy lift. I noticed that
 WKWebView gets 98% of my work done. For the remaining 2% cases I open Google Chrome
 and do the work there.
+
+## Changelog
+
+### 2.0 — libghostty
+
+- **New terminal engine.** neetly's terminal is now powered by
+  [libghostty](https://github.com/ghostty-org/ghostty) — the engine behind the
+  [Ghostty](https://ghostty.org) terminal — replacing SwiftTerm. It brings GPU
+  (Metal) rendering and Ghostty's battle-tested VT emulation, and fixes a class
+  of reflow, scrolling, and input bugs. SwiftTerm stays bundled as a fallback
+  (`NEETLY_TERMINAL=swiftterm`).
+- **New app icon.**
+
+neetly **1.0 through 1.0.37** used [SwiftTerm](https://github.com/migueldeicaza/SwiftTerm),
+a pure-Swift, CPU-rendered terminal. **2.0** is the first release on libghostty —
+a change big enough to earn the major version bump.
+
+---
+
+### Why we moved to libghostty
+
+The long version, for anyone curious about the engineering behind 2.0.
+
+**What pushed it.** SwiftTerm served neetly well through the 1.x line. But as
+more people put it through real work, a class of terminal bugs showed up and
+stuck: text not reflowing cleanly when a pane was resized, scrolling glitches,
+overlapping glyphs, and — occasionally — a typed character arriving twice (`ls`
+coming out as `lss`). People who had carefully tuned terminal setups elsewhere
+found those setups didn't behave the same here. In one round of testing,
+roughly 25 of 30 people hit a terminal issue. That moved the terminal from
+"good enough" to "the thing holding the product back."
+
+**Why not earlier.** libghostty had been evaluated before and set aside — the
+integration wasn't trivial and, at the time, the stability concerns were too
+vague to justify the cost. What changed was that the concerns stopped being
+vague: widespread, reproducible failures in real use.
+
+**What libghostty is.** A terminal is really three parts: a pseudo-terminal
+(PTY) running your shell; an *emulator* that turns the shell's byte stream into
+a grid of cells — tracking colors, the cursor, scrollback, and line reflow;
+and a *renderer* that draws that grid. The emulator is the hardest, most
+bug-prone part. libghostty is that machinery, extracted from
+[Ghostty](https://ghostty.org) as an embeddable library and proven by
+Ghostty's large user base. It comes in two layers: `libghostty-vt`, the
+emulator core on its own (you supply the renderer), and a full surface API
+that bundles the emulator with Ghostty's GPU renderer and input pipeline,
+ready to host in a native view.
+
+**The architecture choice.** neetly's bugs spanned both rendering (reflow,
+overlap) and input (doubled keystrokes). Taking only the emulator core would
+have meant writing our own renderer and input handling — re-deriving, and
+re-owning the bugs of, exactly the layers that were failing. So neetly uses
+the full surface API: Ghostty's actual renderer and input pipeline. The
+terminal in neetly 2.0 is, under the hood, the same machine as Ghostty.
+
+**The dependency choice.** Upstream libghostty doesn't ship a prebuilt binary
+for embedding. The options were to build the framework ourselves — which means
+maintaining a Ghostty fork and CI, as other embedders do — or to use
+[libghostty-spm](https://github.com/Lakr233/libghostty-spm), a community Swift
+package that bundles a prebuilt binary with a Swift wrapper around the AppKit
+hosting, input, and IME handling. neetly uses libghostty-spm: that wrapper is
+the genuinely hard part, it's MIT-licensed (so the lock-in is soft — worst
+case the package can be forked), and building our own pipeline would have been
+speculative work against a problem we don't have. The rule throughout: act on
+concrete needs, not on a feeling of control.
+
+**How it rolled out.** The migration went in stages. First an isolated,
+throwaway target proved libghostty could embed and run a real shell at all.
+Then the real integration landed behind a runtime switch — both terminal
+backends conform to one `TerminalTab` interface, so the rest of the app never
+had to care which engine is active, and the swap happens at a single point.
+A private beta build, on its own update channel so it never reached public
+users, put libghostty in front of testers. Once it worked for every tester it
+was handed to, it became the default for everyone in 2.0 — with SwiftTerm kept
+in the build as a fallback for anyone who hits a rough edge.
