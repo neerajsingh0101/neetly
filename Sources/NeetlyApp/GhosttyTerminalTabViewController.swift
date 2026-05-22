@@ -91,19 +91,47 @@ final class GhosttyTerminalTabViewController: NSViewController, TerminalTab {
             guard let self else { return }
 
             // Prepend the neetly CLI's directory to PATH so the `neetly`
-            // command works inside the terminal, then export the pane env —
-            // all on one line to keep startup noise to a single visible line.
+            // command works inside the terminal, then export the pane env.
             let execDir = URL(fileURLWithPath: ProcessInfo.processInfo.arguments[0])
                 .deletingLastPathComponent().path
             var exports = "export PATH='\(Self.shellEscape(execDir))':\"$PATH\""
             for (key, value) in self.environment {
                 exports += " \(key)='\(Self.shellEscape(value))'"
             }
-            self.terminalView.sendText(exports + "\n")
+            self.runLine(exports)
 
             guard !self.command.isEmpty else { return }
-            self.terminalView.sendText(self.command + "\n")
+            self.runLine(self.command)
         }
+    }
+
+    /// Type `line` into the shell and submit it.
+    ///
+    /// libghostty wraps `sendText` in bracketed-paste markers whenever the
+    /// shell has bracketed-paste mode on — which interactive shells do — so a
+    /// trailing "\n" is pasted as literal text, not run. We therefore send the
+    /// line as text and submit it with a synthesized Return key event, which
+    /// goes through ghostty's key path (encoded to CR) exactly as if the user
+    /// had pressed Return.
+    private func runLine(_ line: String) {
+        terminalView.sendText(line)
+        pressReturn()
+    }
+
+    private func pressReturn() {
+        guard let event = NSEvent.keyEvent(
+            with: .keyDown,
+            location: .zero,
+            modifierFlags: [],
+            timestamp: ProcessInfo.processInfo.systemUptime,
+            windowNumber: terminalView.window?.windowNumber ?? 0,
+            context: nil,
+            characters: "\r",
+            charactersIgnoringModifiers: "\r",
+            isARepeat: false,
+            keyCode: 36 // kVK_Return
+        ) else { return }
+        terminalView.keyDown(with: event)
     }
 
     private static func shellEscape(_ s: String) -> String {
