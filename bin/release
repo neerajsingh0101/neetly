@@ -16,18 +16,24 @@ else
     SIGN_UPDATE=""
 fi
 
-# Get the latest release tag and bump the patch version
-# Filter to stable v* tags so beta-v* prereleases are never picked up here.
-LATEST=$(gh release list --repo "$REPO" --limit 100 --json tagName --jq '[.[].tagName | select(startswith("v"))] | .[0] // "v0.0.0"' 2>/dev/null || echo "v0.0.0")
-echo "Current version: $LATEST"
+# Determine the release version: an explicit `bin/release X.Y.Z` argument
+# wins; otherwise take the latest stable v* tag and bump the patch number.
+# (The v* filter keeps beta-v* prereleases out of the auto-bump.)
+if [ -n "${1:-}" ]; then
+    NEW_VERSION="${1#v}"
+    NEW_TAG="v${NEW_VERSION}"
+    echo "Releasing explicit version: $NEW_TAG"
+else
+    LATEST=$(gh release list --repo "$REPO" --limit 100 --json tagName --jq '[.[].tagName | select(startswith("v"))] | .[0] // "v0.0.0"' 2>/dev/null || echo "v0.0.0")
+    echo "Current version: $LATEST"
 
-VERSION="${LATEST#v}"
-IFS='.' read -r MAJOR MINOR PATCH <<< "$VERSION"
-PATCH=$((PATCH + 1))
-NEW_VERSION="${MAJOR}.${MINOR}.${PATCH}"
-NEW_TAG="v${NEW_VERSION}"
-
-echo "New version: $NEW_TAG"
+    VERSION="${LATEST#v}"
+    IFS='.' read -r MAJOR MINOR PATCH <<< "$VERSION"
+    PATCH=$((PATCH + 1))
+    NEW_VERSION="${MAJOR}.${MINOR}.${PATCH}"
+    NEW_TAG="v${NEW_VERSION}"
+    echo "New version: $NEW_TAG"
+fi
 
 # Build DMG with version embedded in Info.plist
 echo ""
