@@ -19,12 +19,14 @@ final class GhosttyTerminalTabViewController: NSViewController, TerminalTab {
     private var terminalView: TerminalView!
     private var hasStarted = false
 
-    /// One ghostty runtime (`ghostty_app`) shared by every terminal tab,
-    /// themed from `~/.config/neetly/terminal.json` so ghostty matches
-    /// Neetly's look. Resolved once; config edits apply on next launch.
-    static let sharedController: TerminalController = {
+    /// One ghostty runtime (`ghostty_app`) shared by every terminal tab.
+    static let sharedController = TerminalController(configuration: makeConfiguration())
+
+    /// Builds the ghostty terminal configuration from Neetly's
+    /// `~/.config/neetly/terminal.json`, so ghostty matches the app's look.
+    static func makeConfiguration() -> TerminalConfiguration {
         let cfg = TerminalConfig.load()
-        return TerminalController { builder in
+        return TerminalConfiguration { builder in
             builder.withFontFamily(cfg.fontFamily ?? "JetBrains Mono")
             builder.withFontSize(Float(cfg.fontSize ?? 17))
             if let bg = cfg.backgroundColor { builder.withBackground(bg) }
@@ -37,11 +39,21 @@ final class GhosttyTerminalTabViewController: NSViewController, TerminalTab {
                 builder.withPalette(12, color: link)
             }
             // Advertise the universally-installed `xterm-256color` terminfo
-            // entry rather than ghostty's own `xterm-ghostty` (which we don't
-            // bundle), so vim/htop/lazygit work on every machine.
+            // entry rather than ghostty's own `xterm-ghostty`, so
+            // vim/htop/lazygit work on every machine.
             builder.withCustom("term", "xterm-256color")
+            // Let Neetly's menu own Cmd+, (Settings): ghostty binds it to
+            // open_config by default and would otherwise swallow the shortcut.
+            builder.withCustom("keybind", "super+,=unbind")
         }
-    }()
+    }
+
+    /// Re-reads `terminal.json` and live-applies it to every open ghostty
+    /// terminal (and tabs created afterward). Call after the user changes
+    /// terminal appearance in Settings.
+    static func reloadConfiguration() {
+        sharedController.setTerminalConfiguration(makeConfiguration())
+    }
 
     init(command: String, repoPath: String, environment: [String: String]) {
         self.command = command

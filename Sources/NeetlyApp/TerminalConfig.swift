@@ -1,13 +1,13 @@
 import AppKit
 
 struct TerminalConfig: Codable {
-    let fontFamily: String?
-    let fontSize: CGFloat?
-    let backgroundColor: String?
-    let foregroundColor: String?
-    let selectionColor: String?
-    let linkColor: String?
-    let scrollback: Int?
+    var fontFamily: String?
+    var fontSize: CGFloat?
+    var backgroundColor: String?
+    var foregroundColor: String?
+    var selectionColor: String?
+    var linkColor: String?
+    var scrollback: Int?
 
     static let `default` = TerminalConfig(
         fontFamily: nil,
@@ -27,6 +27,21 @@ struct TerminalConfig: Codable {
             return .default
         }
         return config
+    }
+
+    /// Writes this config to ~/.config/neetly/terminal.json.
+    func save() {
+        let home = FileManager.default.homeDirectoryForCurrentUser
+        let dir = home.appendingPathComponent(".config/neetly")
+        let configFile = dir.appendingPathComponent("terminal.json")
+        do {
+            try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+            try encoder.encode(self).write(to: configFile, options: .atomic)
+        } catch {
+            NSLog("TerminalConfig: failed to save: \(error)")
+        }
     }
 
     var font: NSFont {

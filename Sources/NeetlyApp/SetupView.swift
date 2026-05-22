@@ -779,9 +779,12 @@ struct SettingsScreen: View {
     @State private var worktreeDir: String = NeetlySettings.shared.worktreeBaseDir
     @State private var diffCommand: String = NeetlySettings.shared.diffCommand
     @State private var postCreateCommand: String = NeetlySettings.shared.postWorktreeCreateCommand
-    @State private var message: String?
-    @State private var messageIsError: Bool = false
+    @State private var fontSize: Int = Int(TerminalConfig.load().fontSize ?? 17)
+    @State private var worktreeError: String?
+    @FocusState private var focusedField: Field?
     var onBack: () -> Void
+
+    private enum Field { case worktreeDir, postCreate, diffCommand }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -818,7 +821,14 @@ struct SettingsScreen: View {
                             TextField("", text: $worktreeDir)
                                 .textFieldStyle(.roundedBorder)
                                 .font(.system(size: 15, design: .monospaced))
+                                .focused($focusedField, equals: .worktreeDir)
+                                .onSubmit { commitWorktreeDir() }
                             Button("Browse...") { pickDirectory() }
+                        }
+                        if let worktreeError {
+                            Text(worktreeError)
+                                .font(.system(size: 13))
+                                .foregroundColor(.red)
                         }
                     }
 
@@ -832,6 +842,8 @@ struct SettingsScreen: View {
                         TextField("e.g. mise trust $WORKTREE_DIRECTORY", text: $postCreateCommand)
                             .textFieldStyle(.roundedBorder)
                             .font(.system(size: 15, design: .monospaced))
+                            .focused($focusedField, equals: .postCreate)
+                            .onSubmit { commitPostCreate() }
                     }
 
                     Divider()
@@ -854,6 +866,8 @@ struct SettingsScreen: View {
                         TextField("", text: $diffCommand)
                             .textFieldStyle(.roundedBorder)
                             .font(.system(size: 15, design: .monospaced))
+                            .focused($focusedField, equals: .diffCommand)
+                            .onSubmit { commitDiffCommand() }
                     }
 
                     // Cmd+2: Close Diff (read-only)
@@ -873,25 +887,38 @@ struct SettingsScreen: View {
                             .foregroundColor(.secondary)
                     }
 
-                    if let msg = message {
-                        Text(msg)
+                    Divider()
+
+                    // Terminal font size
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Terminal Font Size")
+                            .font(.system(size: 16, weight: .medium))
+                        Text("Point size for text in terminal tabs. Changes apply to open terminals immediately.")
                             .font(.system(size: 13))
-                            .foregroundColor(messageIsError ? .red : .green)
+                            .foregroundColor(.secondary)
+                        Stepper(value: $fontSize, in: 8 ... 32) {
+                            Text("\(fontSize) pt")
+                                .font(.system(size: 15, design: .monospaced))
+                        }
+                        .frame(width: 130, alignment: .leading)
                     }
 
-                    HStack {
-                        Spacer()
-                        Button("Save") { save() }
-                            .keyboardShortcut(.return)
-                            .buttonStyle(.borderedProminent)
-                            .controlSize(.large)
-                    }
                 }
                 .padding(.horizontal, 20)
                 .padding(.bottom, 20)
             }
         }
         .frame(minWidth: 700, minHeight: 600)
+        .onChange(of: fontSize) { _, _ in commitFontSize() }
+        .onChange(of: focusedField) { previous, _ in
+            // Commit a field's value as soon as focus leaves it.
+            switch previous {
+            case .worktreeDir: commitWorktreeDir()
+            case .postCreate: commitPostCreate()
+            case .diffCommand: commitDiffCommand()
+            case .none: break
+            }
+        }
     }
 
     private func pickDirectory() {
@@ -902,37 +929,49 @@ struct SettingsScreen: View {
         panel.message = "Select the directory for worktrees"
         if panel.runModal() == .OK, let url = panel.url {
             worktreeDir = url.path
+            commitWorktreeDir()
         }
     }
 
-    private func save() {
-        message = nil
+    // Each setting commits the moment the user finishes editing it — on Return
+    // or when focus leaves the field — so there is no Save button.
+
+    private func commitWorktreeDir() {
         let path = worktreeDir.trimmingCharacters(in: .whitespaces)
         guard !path.isEmpty else {
-            message = "Please provide a directory path."
-            messageIsError = true
+            worktreeError = "Please provide a directory path."
             return
         }
-
         let expanded = NSString(string: path).expandingTildeInPath
-
         var isDir: ObjCBool = false
-        if FileManager.default.fileExists(atPath: expanded, isDirectory: &isDir), isDir.boolValue {
-            worktreeDir = expanded
-            NeetlySettings.shared.setWorktreeBaseDir(expanded)
+        guard FileManager.default.fileExists(atPath: expanded, isDirectory: &isDir),
+              isDir.boolValue
+        else {
+            worktreeError = "Directory does not exist: \(expanded)"
+            return
+        }
+        worktreeError = nil
+        worktreeDir = expanded
+        NeetlySettings.shared.setWorktreeBaseDir(expanded)
+    }
 
-            let cmd = diffCommand.trimmingCharacters(in: .whitespaces)
-            NeetlySettings.shared.setDiffCommand(cmd.isEmpty ? NeetlySettings.defaultDiffCommand : cmd)
+    private func commitDiffCommand() {
+        let cmd = diffCommand.trimmingCharacters(in: .whitespaces)
+        NeetlySettings.shared.setDiffCommand(cmd.isEmpty ? NeetlySettings.defaultDiffCommand : cmd)
+    }
 
-            NeetlySettings.shared.setPostWorktreeCreateCommand(
-                postCreateCommand.trimmingCharacters(in: .whitespacesAndNewlines)
-            )
+    private func commitPostCreate() {
+        NeetlySettings.shared.setPostWorktreeCreateCommand(
+            postCreateCommand.trimmingCharacters(in: .whitespacesAndNewlines)
+        )
+    }
 
-            message = "Settings saved."
-            messageIsError = false
-        } else {
-            message = "Directory does not exist: \(expanded)"
-            messageIsError = true
+    private func commitFontSize() {
+        var config = TerminalConfig.load()
+        config.fontSize = CGFloat(fontSize)
+        config.save()
+        if TerminalEngine.current == .ghostty {
+            GhosttyTerminalTabViewController.reloadConfiguration()
         }
     }
 }
