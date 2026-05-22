@@ -42,9 +42,12 @@ final class GhosttyTerminalTabViewController: NSViewController, TerminalTab {
             // entry rather than ghostty's own `xterm-ghostty`, so
             // vim/htop/lazygit work on every machine.
             builder.withCustom("term", "xterm-256color")
-            // Let Neetly's menu own Cmd+, (Settings): ghostty binds it to
-            // open_config by default and would otherwise swallow the shortcut.
+            // Let Neetly's menu own these shortcuts — ghostty's defaults
+            // would otherwise swallow them before AppKit could route to the
+            // menu: super+, (open_config) and super+q (quit, which has no
+            // host integration in libghostty so the app would never quit).
             builder.withCustom("keybind", "super+,=unbind")
+            builder.withCustom("keybind", "super+q=unbind")
         }
     }
 
