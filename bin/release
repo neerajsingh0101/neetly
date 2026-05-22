@@ -17,7 +17,8 @@ else
 fi
 
 # Get the latest release tag and bump the patch version
-LATEST=$(gh release list --repo "$REPO" --limit 1 --json tagName --jq '.[0].tagName' 2>/dev/null || echo "v0.0.0")
+# Filter to stable v* tags so beta-v* prereleases are never picked up here.
+LATEST=$(gh release list --repo "$REPO" --limit 100 --json tagName --jq '[.[].tagName | select(startswith("v"))] | .[0] // "v0.0.0"' 2>/dev/null || echo "v0.0.0")
 echo "Current version: $LATEST"
 
 VERSION="${LATEST#v}"

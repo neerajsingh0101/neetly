@@ -4,6 +4,6 @@
 DerivedData/
 .DS_Store
 *.dmg
-appcast.xml
+appcast*.xml
 .sparkle-tools/
 scripts/AppIcon.iconset/

@@ -1,0 +1,148 @@
+import AppKit
+import GhosttyTerminal
+
+/// libghostty-backed terminal tab — a drop-in alternative to the SwiftTerm
+/// `TerminalTabViewController`, selected by `TerminalEngine.current`.
+///
+/// libghostty's `.exec` backend spawns a real login shell in `repoPath`, so
+/// there is no `cd` to send. Per-pane environment and the optional startup
+/// command are injected by typing into that shell via `sendText` — the same
+/// approach the SwiftTerm path already uses.
+final class GhosttyTerminalTabViewController: NSViewController, TerminalTab {
+    let tabId = UUID()
+    let seqId = SeqCounter.shared.nextId()
+    let command: String
+    let repoPath: String
+    let environment: [String: String]
+    var onProcessExited: (() -> Void)?
+
+    private var terminalView: TerminalView!
+    private var hasStarted = false
+
+    /// One ghostty runtime (`ghostty_app`) shared by every terminal tab,
+    /// themed from `~/.config/neetly/terminal.json` so ghostty matches
+    /// Neetly's look. Resolved once; config edits apply on next launch.
+    static let sharedController: TerminalController = {
+        let cfg = TerminalConfig.load()
+        return TerminalController { builder in
+            builder.withFontFamily(cfg.fontFamily ?? "JetBrains Mono")
+            builder.withFontSize(Float(cfg.fontSize ?? 17))
+            if let bg = cfg.backgroundColor { builder.withBackground(bg) }
+            if let fg = cfg.foregroundColor { builder.withForeground(fg) }
+            if let sel = cfg.selectionColor { builder.withSelectionBackground(sel) }
+            // Neetly tints links by overriding ANSI palette blue (4) and
+            // bright blue (12) — the same indices its OSC-4 trick used.
+            if let link = cfg.linkColor {
+                builder.withPalette(4, color: link)
+                builder.withPalette(12, color: link)
+            }
+            // Advertise the universally-installed `xterm-256color` terminfo
+            // entry rather than ghostty's own `xterm-ghostty` (which we don't
+            // bundle), so vim/htop/lazygit work on every machine.
+            builder.withCustom("term", "xterm-256color")
+        }
+    }()
+
+    init(command: String, repoPath: String, environment: [String: String]) {
+        self.command = command
+        self.repoPath = repoPath
+        self.environment = environment
+        super.init(nibName: nil, bundle: nil)
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError() }
+
+    override func loadView() {
+        let tv = TerminalView(frame: NSRect(x: 0, y: 0, width: 800, height: 600))
+        terminalView = tv
+        view = tv
+    }
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        terminalView.delegate = self
+        terminalView.configuration = TerminalSurfaceOptions(
+            backend: .exec, // real PTY + login shell, started in repoPath
+            workingDirectory: repoPath
+        )
+        terminalView.controller = Self.sharedController
+    }
+
+    override func viewDidAppear() {
+        super.viewDidAppear()
+        if !hasStarted {
+            hasStarted = true
+            startCommand()
+        }
+        focusTerminal()
+    }
+
+    override func viewDidLayout() {
+        super.viewDidLayout()
+        terminalView.fitToSize()
+    }
+
+    /// Inject this pane's environment + the optional startup command by typing
+    /// into the freshly spawned shell. The 0.5s delay mirrors the SwiftTerm
+    /// path — it gives the shell time to render its first prompt.
+    private func startCommand() {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+            guard let self else { return }
+
+            // Prepend the neetly CLI's directory to PATH so the `neetly`
+            // command works inside the terminal, then export the pane env —
+            // all on one line to keep startup noise to a single visible line.
+            let execDir = URL(fileURLWithPath: ProcessInfo.processInfo.arguments[0])
+                .deletingLastPathComponent().path
+            var exports = "export PATH='\(Self.shellEscape(execDir))':\"$PATH\""
+            for (key, value) in self.environment {
+                exports += " \(key)='\(Self.shellEscape(value))'"
+            }
+            self.terminalView.sendText(exports + "\n")
+
+            guard !self.command.isEmpty else { return }
+            self.terminalView.sendText(self.command + "\n")
+        }
+    }
+
+    private static func shellEscape(_ s: String) -> String {
+        s.replacingOccurrences(of: "'", with: "'\\''")
+    }
+
+    // MARK: - TerminalTab
+
+    func focusTerminal() {
+        view.window?.makeFirstResponder(terminalView)
+    }
+
+    func sendText(_ text: String) {
+        terminalView.sendText(text)
+    }
+
+    func terminateProcess() {
+        // Tearing down the view frees the ghostty surface, which closes the
+        // PTY and sends SIGHUP to the foreground process group — enough to
+        // release ports in the common case. Explicit SIGTERM parity with the
+        // SwiftTerm path is a follow-up (libghostty-spm doesn't expose the
+        // child fd).
+    }
+}
+
+// MARK: - Surface callbacks
+
+extension GhosttyTerminalTabViewController:
+    TerminalSurfaceTitleDelegate,
+    TerminalSurfaceResizeDelegate,
+    TerminalSurfaceCloseDelegate
+{
+    func terminalDidChangeTitle(_: String) {}
+
+    func terminalDidResize(columns _: Int, rows _: Int) {}
+
+    func terminalDidClose(processAlive _: Bool) {
+        DispatchQueue.main.async { [weak self] in
+            self?.onProcessExited?()
+        }
+    }
+}

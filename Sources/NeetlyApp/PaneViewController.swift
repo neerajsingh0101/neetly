@@ -87,11 +87,17 @@ class PaneViewController: NSViewController {
     }
 
     func addTerminalTab(command: String) {
-        let vc = TerminalTabViewController(
-            command: command,
-            repoPath: repoPath,
-            environment: socketEnvironment
-        )
+        let vc: any TerminalTab
+        switch TerminalEngine.current {
+        case .ghostty:
+            vc = GhosttyTerminalTabViewController(
+                command: command, repoPath: repoPath, environment: socketEnvironment
+            )
+        case .swiftTerm:
+            vc = TerminalTabViewController(
+                command: command, repoPath: repoPath, environment: socketEnvironment
+            )
+        }
         vc.onProcessExited = { [weak self, weak vc] in
             guard let self, let vc else { return }
             if let idx = self.tabs.firstIndex(where: { $0.viewController === vc }) {
@@ -150,7 +156,7 @@ class PaneViewController: NSViewController {
         vc.viewDidAppear()
 
         // Focus the content
-        if let termVC = vc as? TerminalTabViewController {
+        if let termVC = vc as? (any TerminalTab) {
             termVC.focusTerminal()
         }
 
@@ -189,9 +195,9 @@ class PaneViewController: NSViewController {
 
     func tabCount() -> Int { tabs.count }
 
-    func activeTerminalTab() -> TerminalTabViewController? {
+    func activeTerminalTab() -> (any TerminalTab)? {
         guard activeTabIndex >= 0 && activeTabIndex < tabs.count else { return nil }
-        return tabs[activeTabIndex].viewController as? TerminalTabViewController
+        return tabs[activeTabIndex].viewController as? (any TerminalTab)
     }
 
     func activeBrowserTab() -> BrowserTabViewController? {
@@ -208,7 +214,7 @@ class PaneViewController: NSViewController {
     /// jobs, then shell teardown) so servers release ports on session close.
     func terminateAllTerminals() {
         for tab in tabs {
-            if let terminal = tab.viewController as? TerminalTabViewController {
+            if let terminal = tab.viewController as? (any TerminalTab) {
                 terminal.terminateProcess()
             }
         }
@@ -223,7 +229,7 @@ class PaneViewController: NSViewController {
             let title: String
             switch tab.kind {
             case .terminal:
-                let vc = tab.viewController as! TerminalTabViewController
+                let vc = tab.viewController as! (any TerminalTab)
                 tabId = vc.tabId.uuidString
                 tabSeq = vc.seqId
                 type = "terminal"
@@ -254,7 +260,7 @@ class PaneViewController: NSViewController {
         let seqNum = Int(tabId)
         for tab in tabs {
             if tab.kind == .terminal,
-               let vc = tab.viewController as? TerminalTabViewController {
+               let vc = tab.viewController as? (any TerminalTab) {
                 let match = (seqNum != nil && vc.seqId == seqNum)
                     || vc.tabId.uuidString.hasPrefix(needle)
                 if match {
@@ -282,7 +288,7 @@ class PaneViewController: NSViewController {
             let icon: NSImage?
             switch tab.kind {
             case .terminal:
-                let termCmd = (tab.viewController as! TerminalTabViewController).command
+                let termCmd = (tab.viewController as! (any TerminalTab)).command
                 title = termCmd.isEmpty ? "Terminal" : termCmd
                 icon = NSImage(systemSymbolName: "terminal", accessibilityDescription: nil)
             case .browser:

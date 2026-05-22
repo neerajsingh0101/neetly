@@ -1,0 +1,108 @@
+#!/bin/bash
+set -euo pipefail
+
+# Publishes a private Neetly Beta build. The beta DMG goes on its own
+# `beta-v<N>` prerelease tag; the Sparkle appcast the beta app polls lives on
+# a fixed `beta` tag that we overwrite each run. Neither is ever marked
+# --latest, so the public appcast.xml and public auto-update are untouched —
+# existing Neetly users cannot receive this build.
+
+REPO="neetozone/neetly"
+FEED_TAG="beta"           # fixed tag hosting the beta appcast asset
+FEED_FILE="appcast-beta.xml"
+
+# Locate Sparkle's sign_update (same EdDSA key as stable releases).
+SPARKLE_ARTIFACT_BIN=".build/artifacts/sparkle/Sparkle/bin/sign_update"
+SPARKLE_FALLBACK_BIN=".sparkle-tools/bin/sign_update"
+if [ -x "$SPARKLE_ARTIFACT_BIN" ]; then
+    SIGN_UPDATE="$SPARKLE_ARTIFACT_BIN"
+elif [ -x "$SPARKLE_FALLBACK_BIN" ]; then
+    SIGN_UPDATE="$SPARKLE_FALLBACK_BIN"
+else
+    SIGN_UPDATE=""
+fi
+
+# Next beta number = highest existing beta-v<N> tag + 1.
+LATEST_N=$(gh release list --repo "$REPO" --limit 100 --json tagName \
+    --jq '[.[].tagName | select(startswith("beta-v")) | ltrimstr("beta-v") | tonumber] | max // 0' \
+    2>/dev/null || echo 0)
+NEW_N=$((LATEST_N + 1))
+VERSION="0.0.${NEW_N}"
+TAG="beta-v${NEW_N}"
+echo "Building Neetly Beta #${NEW_N} (version ${VERSION}, tag ${TAG})"
+
+# Build the beta DMG.
+echo ""
+echo "==> Building beta DMG..."
+bash scripts/build-dmg.sh "$VERSION" beta
+
+# Sign it.
+if [ -z "$SIGN_UPDATE" ]; then
+    echo "ERROR: sign_update not found. Run 'swift build' to populate $SPARKLE_ARTIFACT_BIN." >&2
+    exit 1
+fi
+echo ""
+echo "==> Signing beta DMG..."
+SIGNATURE=$("$SIGN_UPDATE" -p neetly-beta-macos.dmg)
+if [ -z "$SIGNATURE" ]; then
+    echo "ERROR: sign_update returned an empty signature (is the private key in the Keychain?)" >&2
+    exit 1
+fi
+
+# Generate the beta appcast.
+echo ""
+echo "==> Generating $FEED_FILE..."
+DMG_SIZE=$(stat -f%z neetly-beta-macos.dmg)
+PUB_DATE=$(date -R)
+DOWNLOAD_URL="https://github.com/$REPO/releases/download/$TAG/neetly-beta-macos.dmg"
+
+cat > "$FEED_FILE" << APPCAST
+<?xml version="1.0" standalone="yes"?>
+<rss xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" version="2.0">
+    <channel>
+        <title>Neetly Beta</title>
+        <link>https://github.com/$REPO</link>
+        <description>Neetly beta channel</description>
+        <language>en</language>
+        <item>
+            <title>Neetly Beta $NEW_N</title>
+            <pubDate>$PUB_DATE</pubDate>
+            <sparkle:version>$VERSION</sparkle:version>
+            <sparkle:shortVersionString>$VERSION</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+            <enclosure
+                url="$DOWNLOAD_URL"
+                length="$DMG_SIZE"
+                type="application/octet-stream"
+                sparkle:edSignature="$SIGNATURE"
+            />
+        </item>
+    </channel>
+</rss>
+APPCAST
+
+# Publish the DMG on its own prerelease tag.
+echo ""
+echo "==> Creating prerelease $TAG..."
+gh release create "$TAG" neetly-beta-macos.dmg \
+    --repo "$REPO" \
+    --title "Neetly Beta $NEW_N" \
+    --notes "Neetly Beta build $NEW_N (libghostty terminal)." \
+    --prerelease
+
+# Publish the appcast to the fixed feed tag, creating that release once.
+echo ""
+echo "==> Publishing $FEED_FILE to the '$FEED_TAG' tag..."
+if ! gh release view "$FEED_TAG" --repo "$REPO" >/dev/null 2>&1; then
+    gh release create "$FEED_TAG" \
+        --repo "$REPO" \
+        --title "Neetly beta channel" \
+        --notes "Sparkle appcast feed for the Neetly beta channel. Do not delete." \
+        --prerelease
+fi
+gh release upload "$FEED_TAG" "$FEED_FILE" --repo "$REPO" --clobber
+
+echo ""
+echo "==> Neetly Beta $NEW_N released."
+echo "    Hand testers this download link:"
+echo "    $DOWNLOAD_URL"

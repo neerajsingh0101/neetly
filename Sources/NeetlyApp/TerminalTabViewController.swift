@@ -1,7 +1,7 @@
 import AppKit
 import SwiftTerm
 
-class TerminalTabViewController: NSViewController, LocalProcessTerminalViewDelegate {
+class TerminalTabViewController: NSViewController, LocalProcessTerminalViewDelegate, TerminalTab {
     let tabId = UUID()
     let seqId = SeqCounter.shared.nextId()
     let command: String
