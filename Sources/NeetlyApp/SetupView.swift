@@ -1149,12 +1149,12 @@ struct SettingsScreen: View {
 
                     Divider()
 
-                    // Cmd+1: Open Diff
+                    // Cmd+G: Open Diff
                     VStack(alignment: .leading, spacing: 8) {
                         HStack(spacing: 6) {
                             Text("Open Diff")
                                 .font(.system(size: 16, weight: .medium))
-                            Text("Cmd+1")
+                            Text("Cmd+G")
                                 .font(.system(size: 11, weight: .medium, design: .monospaced))
                                 .padding(.horizontal, 6)
                                 .padding(.vertical, 2)
@@ -1171,12 +1171,12 @@ struct SettingsScreen: View {
                             .onSubmit { commitDiffCommand() }
                     }
 
-                    // Cmd+2: Close Diff (read-only)
+                    // Cmd+Shift+G: Close Diff (read-only)
                     VStack(alignment: .leading, spacing: 8) {
                         HStack(spacing: 6) {
                             Text("Close Diff")
                                 .font(.system(size: 16, weight: .medium))
-                            Text("Cmd+2")
+                            Text("Cmd+Shift+G")
                                 .font(.system(size: 11, weight: .medium, design: .monospaced))
                                 .padding(.horizontal, 6)
                                 .padding(.vertical, 2)
