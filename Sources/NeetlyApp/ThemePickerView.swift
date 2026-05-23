@@ -56,10 +56,24 @@ struct ThemePickerView: View {
                     }
                 }
                 .listStyle(.plain)
+                .onAppear {
+                    // Center the current theme when the picker opens. The
+                    // first onChange below fires before the List has
+                    // computed row positions, so we defer one tick to catch
+                    // the actual first laid-out frame.
+                    guard let id = currentTheme else { return }
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                        proxy.scrollTo(id, anchor: .center)
+                    }
+                }
                 .onChange(of: highlightedID) { _, newID in
                     guard let id = newID,
                           let theme = results.first(where: { $0.id == id })
                     else { return }
+                    // Skip the no-op case — initial open assigns
+                    // highlightedID = currentTheme, and the .onAppear above
+                    // already handles centering for that.
+                    guard id != currentTheme else { return }
                     apply(theme)
                     withAnimation(.linear(duration: 0.1)) {
                         proxy.scrollTo(id, anchor: .center)
