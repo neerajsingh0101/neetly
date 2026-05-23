@@ -11,6 +11,8 @@ class TabBarView: NSView {
     var onSplitRows: (() -> Void)?
     var onToggleMaximize: (() -> Void)?
     private var buttons: [NSView] = []
+    private var tabInfos: [(title: String, icon: NSImage?, isActive: Bool)] = []
+    private var laidOutWidth: CGFloat = -1
     private let newTerminalButton = NSButton()
     private let newBrowserButton = NSButton()
     private let splitColButton = NSButton()
@@ -78,21 +80,47 @@ class TabBarView: NSView {
     required init?(coder: NSCoder) { fatalError() }
 
     func update(tabs: [(title: String, icon: NSImage?, isActive: Bool)]) {
+        tabInfos = tabs
+        laidOutWidth = -1  // force a re-layout with the new tab set
+        needsLayout = true
+    }
+
+    override func layout() {
+        super.layout()
+        // Re-flow tabs whenever the bar resizes or the tab set changes, so they
+        // shrink to share the available width instead of overflowing past the
+        // action buttons.
+        guard bounds.width != laidOutWidth else { return }
+        laidOutWidth = bounds.width
+        relayoutTabs()
+    }
+
+    private func relayoutTabs() {
         buttons.forEach { $0.removeFromSuperview() }
         buttons.removeAll()
+        let count = tabInfos.count
+        guard count > 0 else { return }
 
-        var x: CGFloat = 4
-        for (i, tab) in tabs.enumerated() {
+        // Tabs span from the left edge up to the right-aligned action buttons.
+        let leftPad: CGFloat = 4
+        let clusterLeft = newTerminalButton.frame.minX
+        let rightEdge = (clusterLeft > leftPad ? clusterLeft : bounds.width - 130) - 6
+        let available = max(0, rightEdge - leftPad)
+        // Share the available width, shrinking (to a floor) when overflowing.
+        let perTab = max(32, min(180, available / CGFloat(count)))
+
+        var x = leftPad
+        for (i, info) in tabInfos.enumerated() {
             let tabView = TabButton(
-                index: i, title: tab.title, icon: tab.icon, isActive: tab.isActive,
-                height: Self.barHeight,
+                index: i, title: info.title, icon: info.icon, isActive: info.isActive,
+                width: perTab, height: Self.barHeight,
                 onSelect: { [weak self] idx in self?.onSelectTab?(idx) },
                 onClose: { [weak self] idx in self?.onCloseTab?(idx) }
             )
             tabView.frame.origin = CGPoint(x: x, y: 0)
             addSubview(tabView)
             buttons.append(tabView)
-            x += tabView.frame.width
+            x += perTab
         }
     }
 
@@ -153,7 +181,7 @@ private class TabButton: NSView {
     private let closeBtn: NSButton
     private var trackingArea: NSTrackingArea?
 
-    init(index: Int, title: String, icon: NSImage?, isActive: Bool, height: CGFloat,
+    init(index: Int, title: String, icon: NSImage?, isActive: Bool, width: CGFloat, height: CGFloat,
          onSelect: @escaping (Int) -> Void, onClose: @escaping (Int) -> Void) {
         self.tabIndex = index
         self.isActive = isActive
@@ -197,11 +225,8 @@ private class TabButton: NSView {
         closeBtn.toolTip = "Close Tab (Cmd+W)"
         addSubview(closeBtn)
 
-        let closeX = x + label.frame.width + 4
-        let rawWidth = closeX + 24
-        let width = min(max(rawWidth, 96), 180)
         frame.size = NSSize(width: width, height: height)
-        label.frame.size.width = width - x - 26
+        label.frame.size.width = max(0, width - x - 26)
         closeBtn.frame = NSRect(x: width - 24, y: (height - 16) / 2, width: 16, height: 16)
 
         // Active tab: a thin accent underline at the bottom — consistent with

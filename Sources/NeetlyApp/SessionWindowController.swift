@@ -291,6 +291,15 @@ class SessionWindowController: NSWindowController {
             guard let ws = ws else { return nil }
             return self?.handleSocketCommand(command, session: ws)
         }
+        ws.splitTree.onLastPaneClosed = { [weak self, weak ws] in
+            // The session's last pane emptied — close the session (deferred so
+            // the in-flight tab/pane teardown finishes first).
+            DispatchQueue.main.async {
+                guard let self, let ws,
+                      let idx = self.sessions.firstIndex(where: { $0 === ws }) else { return }
+                self.closeSession(at: idx)
+            }
+        }
         sessions.append(ws)
         selectSession(at: sessions.count - 1)
 

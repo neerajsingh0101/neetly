@@ -64,6 +64,8 @@ final class SessionStrip: NSView {
     /// Left inset so the first tab clears the native window buttons.
     private let leftInset: CGFloat = 78
     private var tabViews: [SessionTabView] = []
+    private var rowModels: [SessionRowModel] = []
+    private var laidOutWidth: CGFloat = -1
     private let plusButton = NSButton()
 
     override init(frame: NSRect) {
@@ -85,13 +87,41 @@ final class SessionStrip: NSView {
     required init?(coder: NSCoder) { fatalError() }
 
     func update(rows: [SessionRowModel]) {
+        rowModels = rows
+        laidOutWidth = -1  // force a re-layout with the new session set
+        needsLayout = true
+    }
+
+    override func layout() {
+        super.layout()
+        // Re-flow session tabs on resize or when the set changes, so they shrink
+        // to share the available width instead of overflowing off the strip.
+        guard bounds.width != laidOutWidth else { return }
+        laidOutWidth = bounds.width
+        relayoutSessions()
+    }
+
+    private func relayoutSessions() {
         tabViews.forEach { $0.removeFromSuperview() }
         tabViews.removeAll()
 
+        let plusW: CGFloat = 30
+        let count = rowModels.count
+        guard count > 0 else {
+            plusButton.frame = NSRect(x: leftInset + 4, y: (Self.barHeight - 22) / 2, width: 26, height: 22)
+            return
+        }
+
+        // Tabs fill from the left inset to the trailing edge, leaving room for
+        // the "+" button; shrink (to a floor) when they'd overflow.
+        let available = max(0, bounds.width - leftInset - plusW - 8)
+        let perTab = max(96, min(240, available / CGFloat(count)))
+
         var x = leftInset
-        for model in rows {
+        for model in rowModels {
             let tab = SessionTabView(
                 model: model,
+                width: perTab,
                 height: Self.barHeight,
                 onSelect: { [weak self] i in self?.onSelectSession?(i) },
                 onClose: { [weak self] i in self?.onCloseSession?(i) }
@@ -99,7 +129,7 @@ final class SessionStrip: NSView {
             tab.frame.origin = CGPoint(x: x, y: 0)
             addSubview(tab)
             tabViews.append(tab)
-            x += tab.frame.width
+            x += perTab
         }
 
         plusButton.frame = NSRect(x: x + 4, y: (Self.barHeight - 22) / 2, width: 26, height: 22)
@@ -132,7 +162,7 @@ private final class SessionTabView: NSView {
     private let closeBtn = NSButton()
     private var trackingArea: NSTrackingArea?
 
-    init(model: SessionRowModel, height: CGFloat,
+    init(model: SessionRowModel, width: CGFloat, height: CGFloat,
          onSelect: @escaping (Int) -> Void, onClose: @escaping (Int) -> Void) {
         self.index = model.index
         self.isActive = model.isActive
@@ -183,13 +213,9 @@ private final class SessionTabView: NSView {
         closeBtn.action = #selector(closeClicked)
         addSubview(closeBtn)
 
-        // Size to content.
-        let textWidth = max(repoLabel.intrinsicContentSize.width + (nameX - textX),
-                            nameLabel.intrinsicContentSize.width + (nameX - textX))
-        let width = min(max(textWidth + textX + 30, 140), 240)
         frame = NSRect(x: 0, y: 0, width: width, height: height)
-        repoLabel.frame.size.width = width - textX - 26
-        nameLabel.frame.size.width = width - nameX - 26
+        repoLabel.frame.size.width = max(0, width - textX - 26)
+        nameLabel.frame.size.width = max(0, width - nameX - 26)
         closeBtn.frame = NSRect(x: width - 24, y: (height - 16) / 2, width: 16, height: 16)
 
         // Active underline (sits just above the strip's bottom hairline).

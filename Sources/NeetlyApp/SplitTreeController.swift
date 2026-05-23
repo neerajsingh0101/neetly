@@ -32,6 +32,9 @@ class SplitTreeController: NSViewController {
     let socketServer: SocketServer
     /// All pane controllers keyed by pane UUID, for socket command routing.
     private(set) var paneControllers: [UUID: PaneViewController] = [:]
+    /// Fired when the last pane in the tree empties (so the session can close
+    /// instead of leaving an empty pane behind).
+    var onLastPaneClosed: (() -> Void)?
 
     /// State for a maximized pane. Used to restore it on unmaximize.
     private struct MaximizedState {
@@ -191,32 +194,34 @@ class SplitTreeController: NSViewController {
         newPane.view.window?.makeFirstResponder(newPane.view)
     }
 
-    /// When the last tab of a pane is closed, collapse it:
-    /// remove the empty pane and promote the sibling to take the parent split's place.
+    /// Collapse a pane out of its split, leaving the surviving sibling.
+    ///
+    /// We deliberately remove ONLY the closed pane and let the (now single-child)
+    /// split view lay the survivor out full-width — rather than "promoting" the
+    /// sibling up to the parent. Promoting requires detaching the sibling's view
+    /// from the window, and a libghostty terminal surface tears itself down the
+    /// moment its view leaves the window (closing the PTY) — which would kill the
+    /// surviving pane's terminal too.
     func collapsePane(_ pane: PaneViewController) {
-        let emptyView = pane.view
-        guard let splitView = emptyView.superview as? NSSplitView else {
-            // Not inside a split — it's the root pane, nothing to collapse
+        let closedView = pane.view
+        // No enclosing split that still has another pane → this was the session's
+        // last pane. Don't leave an empty pane behind; let the owner close the
+        // session.
+        guard let splitView = closedView.superview as? NSSplitView,
+              splitView.arrangedSubviews.contains(where: { $0 !== closedView }) else {
+            onLastPaneClosed?()
             return
         }
 
-        // Find the sibling view (the other child of the split)
-        let siblings = splitView.arrangedSubviews
-        guard let sibling = siblings.first(where: { $0 !== emptyView }) else { return }
-
-        // Remove the empty pane
         paneControllers.removeValue(forKey: pane.paneId)
         pane.removeFromParent()
+        closedView.removeFromSuperview()
+        splitView.adjustSubviews()  // the remaining pane expands to fill
 
-        // Replace the NSSplitView with the sibling in the parent
-        guard let parent = splitView.superview else { return }
-        sibling.removeFromSuperview()
-        sibling.frame = splitView.frame
-        sibling.autoresizingMask = splitView.autoresizingMask
-        parent.replaceSubview(splitView, with: sibling)
-
-        // Focus the sibling
-        sibling.window?.makeFirstResponder(sibling)
+        // Focus the surviving sibling.
+        if let sibling = splitView.arrangedSubviews.first {
+            sibling.window?.makeFirstResponder(sibling)
+        }
     }
 
     /// Find a pane controller by its UUID string.
