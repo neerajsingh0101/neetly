@@ -17,7 +17,7 @@ Neetly is a Mac code editor built for **web development** and designed to work w
 * **Custom layout** -  arrange your pane the way you want. Give 40% to Claude and the rest to the browser.
 * **Programmatically open tab** - after starting the server, you want to open the browser at a specific place.
 * **small codebase** - Codebase is small enough that you can make changes to meet your needs.
-* **One click diff view** - execut Cmd+1 to see the diff. You can use any tool you want to see the diff.
+* **One click diff view** - execute Cmd+G to see the diff. You can use any tool you want to see the diff.
 
 ## Installation instructions
 
@@ -74,13 +74,13 @@ created after the reset use the new worktree directory.
  <a href="https://developer.apple.com/swift/"><img src="https://img.shields.io/badge/Swift_Package_Manager-F05138?logo=swift&logoColor=white" alt="SPM"></a>
 </p>
 
-## Viewinig the diff
+## Viewing the diff
 
-* Cmd+1 is configured to show you the diff by executing `git diff`. If you want to use a different tool for the diff
+* Cmd+G is configured to show you the diff by executing `git diff`. If you want to use a different tool for the diff
   then you can configure it in **Settings**.
-* After viewing the diff you can close the diff by executing Cmd+2.
-* Here is what Cmd+1 does: opens a new terminal in the right most pane. Executes the **diff command** specified in the **Settings**. Hits Cmd+Shift+m to maximize the window.
-* Here is what Cmd+2 does: Hits Cmd+Shift+m to get out of the full screen mode and then kills that tab.
+* After viewing the diff you can close the diff by executing Cmd+Shift+G.
+* Here is what Cmd+G does: opens a new terminal in the right most pane. Executes the **diff command** specified in the **Settings**. Hits Cmd+Shift+M to maximize the window.
+* Here is what Cmd+Shift+G does: Hits Cmd+Shift+M to get out of the full screen mode and then kills that tab.
 
 ## Layout Config
 
@@ -181,15 +181,43 @@ neetly notify clear        # reset to normal
 
 ## Keyboard Shortcuts
 
+**Panes**
+
 | Shortcut | Action |
 |---|---|
-| Cmd+T | New terminal tab in focused pane |
-| Cmd+Shift+T | New browser tab in focused pane |
-| Cmd+W | Close active tab |
-| Cmd+K | Clear terminal |
+| Cmd+H / Cmd+J / Cmd+K / Cmd+L | Focus pane left / down / up / right |
+| Cmd+D / Cmd+Shift+D | Split pane right / down |
+| Cmd+Shift+W | Close pane |
+| Cmd+Shift+M | Maximize / restore pane |
+
+**Tabs**
+
+| Shortcut | Action |
+|---|---|
+| Cmd+1 … Cmd+9 | Focus tab N in the focused pane |
+| Cmd+Shift+[ / Cmd+Shift+] | Previous / next tab |
+| Cmd+T | New terminal tab |
+| Cmd+Shift+T | New browser tab |
+| Cmd+W | Close tab |
 | Cmd+R | Reload browser |
-| Cmd+Shift+] | Next tab |
-| Cmd+Shift+[ | Previous tab |
+| Cmd+G / Cmd+Shift+G | Open / close diff |
+
+**Sessions**
+
+| Shortcut | Action |
+|---|---|
+| Cmd+Opt+1 … Cmd+Opt+9 | Focus session N |
+| Cmd+Opt+[ / Cmd+Opt+] | Previous / next session |
+| Cmd+N | New session |
+| Cmd+Shift+N | Close session |
+
+**Terminal & app**
+
+| Shortcut | Action |
+|---|---|
+| Ctrl+L | Clear terminal (handled by the shell) |
+| Cmd+, | Open Settings |
+| Cmd+Q | Quit neetly |
 | Cmd+Click | Open a URL displayed in the terminal |
 
 ## Taxonomy

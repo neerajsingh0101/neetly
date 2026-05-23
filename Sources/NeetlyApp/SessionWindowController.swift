@@ -1,5 +1,4 @@
 import AppKit
-import SwiftUI
 
 /// Holds the runtime state for one session.
 class Session {
@@ -169,395 +168,15 @@ class Session {
     }
 }
 
-// MARK: - Session Tab Bar
-
-class SessionTabBar: NSView {
-    var onSelectSession: ((Int) -> Void)?
-    var onCloseSession: ((Int) -> Void)?
-    var onNewSession: (() -> Void)?
-    private var tabViews: [NSView] = []
-    private var detailViews: [NSView] = []
-    private let plusButton = NSButton()
-    private let themeButton = NSButton()
-    private var themePopover: NSPopover?
-    private var activeStatusColor: NSColor?
-    private static let tabRowHeight: CGFloat = 40
-    static let detailRowHeight: CGFloat = 33
-
-    override init(frame: NSRect) {
-        super.init(frame: frame)
-        wantsLayer = true
-        applyChromeTheme()
-
-        plusButton.title = "+"
-        plusButton.toolTip = "New Session"
-        plusButton.isBordered = false
-        plusButton.font = .systemFont(ofSize: 14, weight: .medium)
-        plusButton.target = self
-        plusButton.action = #selector(plusClicked)
-        plusButton.frame = NSRect(x: 0, y: 0, width: 28, height: 24)
-        addSubview(plusButton)
-
-        // Theme palette — pinned to the far-right edge, level with the plus
-        // button (positioned in layout()). A theme is a global setting, so it
-        // sits apart from the per-session tabs rather than scrolling with them.
-        themeButton.image = NSImage(systemSymbolName: "paintpalette", accessibilityDescription: "Themes")
-        themeButton.toolTip = "Terminal Theme"
-        themeButton.isBordered = false
-        themeButton.imagePosition = .imageOnly
-        themeButton.target = self
-        themeButton.action = #selector(themeClicked)
-        themeButton.frame = NSRect(x: 0, y: 41, width: 28, height: 24)
-        addSubview(themeButton)
-    }
-
-    override func layout() {
-        super.layout()
-        // Keep the theme button glued to the far-right edge as the bar resizes.
-        themeButton.frame.origin.x = bounds.width - themeButton.frame.width - 8
-    }
-
-    @available(*, unavailable)
-    required init?(coder: NSCoder) { fatalError() }
-
-    func update(sessions: [(repoName: String, sessionName: String, commitSha: String?, commitURL: String?, isActive: Bool, statusColor: NSColor?, prInfos: [GitHubPRInfo], diffStats: (added: Int, deleted: Int)?)]) {
-        tabViews.forEach { $0.removeFromSuperview() }
-        tabViews.removeAll()
-        detailViews.forEach { $0.removeFromSuperview() }
-        detailViews.removeAll()
-        plusButton.removeFromSuperview()
-
-        let tabRowY: CGFloat = Self.detailRowHeight
-
-        // -- Tab row --
-        var x: CGFloat = 4
-        for (i, ws) in sessions.enumerated() {
-            let tab = SessionTab(
-                index: i, repoName: ws.repoName, sessionName: ws.sessionName,
-                isActive: ws.isActive, statusColor: ws.statusColor,
-                onSelect: { [weak self] idx in self?.onSelectSession?(idx) },
-                onClose: { [weak self] idx in self?.onCloseSession?(idx) }
-            )
-            tab.frame.origin = CGPoint(x: x, y: tabRowY)
-            addSubview(tab)
-            tabViews.append(tab)
-            x += tab.frame.width + 4
-        }
-
-        let plusColor = ChromeTheme.current?.foreground ?? .labelColor
-        let plusFont = NSFont.systemFont(ofSize: 14, weight: .medium)
-        if sessions.isEmpty {
-            plusButton.attributedTitle = NSAttributedString(
-                string: "+ Add new session",
-                attributes: [.font: plusFont, .foregroundColor: plusColor]
-            )
-            plusButton.sizeToFit()
-        } else {
-            plusButton.attributedTitle = NSAttributedString(
-                string: "+",
-                attributes: [.font: plusFont, .foregroundColor: plusColor]
-            )
-            plusButton.frame.size = NSSize(width: 28, height: 24)
-        }
-        plusButton.frame.origin.x = x
-        plusButton.frame.origin.y = tabRowY + 8
-        addSubview(plusButton)
-
-        // Keep the theme button above the (re-added) tabs and plus button.
-        addSubview(themeButton, positioned: .above, relativeTo: nil)
-
-        // -- Detail row (full width, for active session's SHA + PR) --
-        guard let active = sessions.first(where: { $0.isActive }) else {
-            activeStatusColor = nil
-            needsDisplay = true
-            return
-        }
-        activeStatusColor = active.statusColor
-        needsDisplay = true
-
-        let detailFont = NSFont.monospacedSystemFont(ofSize: 14, weight: .regular)
-        let detailBoldFont = NSFont.monospacedDigitSystemFont(ofSize: 14, weight: .medium)
-        // SHA text color — theme-derived, else Catppuccin Overlay0.
-        let detailMuted = ChromeTheme.current?.mutedForeground
-            ?? NSColor(red: 0x6c/255, green: 0x70/255, blue: 0x86/255, alpha: 1)
-        let itemHeight: CGFloat = 20
-        let centerY: CGFloat = (Self.detailRowHeight - itemHeight) / 2
-
-        var detailX: CGFloat = 8
-        if let sha = active.commitSha {
-            if let urlStr = active.commitURL, let url = URL(string: urlStr) {
-                let attr = NSAttributedString(string: sha, attributes: [
-                    .font: detailFont,
-                    .foregroundColor: detailMuted,
-                ])
-                let btn = NSButton(frame: .zero)
-                btn.isBordered = false
-                btn.attributedTitle = attr
-                btn.target = self
-                btn.action = #selector(openCommitURL(_:))
-                btn.toolTip = "Open commit on GitHub"
-                btn.sizeToFit()
-                btn.frame = NSRect(x: detailX, y: centerY, width: btn.intrinsicContentSize.width, height: itemHeight)
-                addSubview(btn)
-                detailViews.append(btn)
-                commitURL = url
-                detailX += btn.frame.width + 12
-            } else {
-                let label = NSTextField(labelWithString: sha)
-                label.font = detailFont
-                label.textColor = detailMuted
-                label.sizeToFit()
-                label.frame.origin = CGPoint(x: detailX, y: centerY)
-                label.frame.size.height = itemHeight
-                addSubview(label)
-                detailViews.append(label)
-                detailX += label.frame.width + 12
-            }
-        }
-
-        prURLsByButton.removeAll()
-        for pr in active.prInfos {
-            // Merged PRs are informational, not urgent — match the SHA color
-            // so they blend in across themes instead of always reading purple.
-            let prColor: NSColor = pr.state == .merged
-                ? detailMuted
-                : SessionTab.color(for: pr.state)
-            let stateText = SessionTab.stateLabel(for: pr.state)
-
-            let prAttr = NSMutableAttributedString()
-            prAttr.append(NSAttributedString(string: " PR #\(pr.number) (\(stateText)) \u{2197} ", attributes: [
-                .font: detailBoldFont,
-                .foregroundColor: prColor,
-            ]))
-
-            let prBtn = NSButton(frame: .zero)
-            prBtn.wantsLayer = true
-            prBtn.layer?.cornerRadius = 4
-            prBtn.layer?.backgroundColor = prColor.withAlphaComponent(0.10).cgColor
-            prBtn.isBordered = false
-            prBtn.attributedTitle = prAttr
-            prBtn.target = self
-            prBtn.action = #selector(openPRURL(_:))
-            prBtn.toolTip = "#\(pr.number) \(pr.title)"
-            prBtn.sizeToFit()
-            prBtn.frame = NSRect(x: detailX, y: centerY, width: prBtn.intrinsicContentSize.width, height: itemHeight)
-            addSubview(prBtn)
-            detailViews.append(prBtn)
-            if let url = URL(string: pr.url) {
-                prURLsByButton[prBtn] = url
-            }
-            detailX += prBtn.frame.width + 6
-        }
-        if !active.prInfos.isEmpty {
-            detailX += 6
-        }
-
-        // -- Diff stats (+N -M) --
-        if let stats = active.diffStats, stats.added > 0 || stats.deleted > 0 {
-            let diffAttr = NSMutableAttributedString()
-            if stats.added > 0 {
-                diffAttr.append(NSAttributedString(string: "+\(stats.added)", attributes: [
-                    .font: detailBoldFont,
-                    .foregroundColor: NSColor.systemGreen,
-                ]))
-            }
-            if stats.added > 0 && stats.deleted > 0 {
-                diffAttr.append(NSAttributedString(string: " ", attributes: [
-                    .font: detailBoldFont,
-                ]))
-            }
-            if stats.deleted > 0 {
-                diffAttr.append(NSAttributedString(string: "-\(stats.deleted)", attributes: [
-                    .font: detailBoldFont,
-                    .foregroundColor: NSColor.systemRed,
-                ]))
-            }
-            let diffLabel = NSTextField(labelWithAttributedString: diffAttr)
-            diffLabel.sizeToFit()
-            diffLabel.frame.origin = CGPoint(x: detailX, y: centerY)
-            addSubview(diffLabel)
-            detailViews.append(diffLabel)
-        }
-    }
-
-    private var commitURL: URL?
-    private var prURLsByButton: [NSButton: URL] = [:]
-
-    @objc private func openCommitURL(_ sender: Any?) {
-        if let url = commitURL { NSWorkspace.shared.open(url) }
-    }
-
-    @objc private func openPRURL(_ sender: Any?) {
-        guard let btn = sender as? NSButton, let url = prURLsByButton[btn] else { return }
-        NSWorkspace.shared.open(url)
-    }
-
-    @objc private func plusClicked() {
-        onNewSession?()
-    }
-
-    @objc private func themeClicked() {
-        let popover = NSPopover()
-        popover.behavior = .transient
-        popover.contentSize = NSSize(width: 320, height: 460)
-        popover.contentViewController = NSHostingController(rootView: ThemePickerView())
-        popover.show(relativeTo: themeButton.bounds, of: themeButton, preferredEdge: .minY)
-        themePopover = popover
-    }
-
-    static let activeTabColor = NSColor(red: 30/255, green: 30/255, blue: 46/255, alpha: 1.0)
-
-    /// Paints the bar background from the picked theme, or the system color
-    /// when none is set. Also re-runs `draw()` for the detail-row strip.
-    func applyChromeTheme() {
-        let theme = ChromeTheme.current
-        layer?.backgroundColor = (theme?.background ?? .windowBackgroundColor).cgColor
-        themeButton.contentTintColor = theme?.foreground ?? .labelColor
-        needsDisplay = true
-    }
-
-    override func draw(_ dirtyRect: NSRect) {
-        super.draw(dirtyRect)
-        let theme = ChromeTheme.current
-        // Detail row background — same color as the active tab. When the
-        // active tab carries a status color, match it (same alpha the tab
-        // uses) so the strip visually merges with the active tab.
-        if let color = activeStatusColor {
-            color.withAlphaComponent(0.45).setFill()
-        } else {
-            (theme?.activeBackground ?? Self.activeTabColor).setFill()
-        }
-        NSRect(x: 0, y: 1, width: bounds.width, height: Self.detailRowHeight - 1).fill()
-        // Bottom border
-        (theme?.border ?? NSColor.separatorColor).setFill()
-        NSRect(x: 0, y: 0, width: bounds.width, height: 1).fill()
-    }
-}
-
-private class SessionTab: NSView {
-    let index: Int
-    private let onSelect: (Int) -> Void
-    private let onClose: (Int) -> Void
-    private let closeBtn: NSButton
-    private var trackingArea: NSTrackingArea?
-
-    init(index: Int, repoName: String, sessionName: String,
-         isActive: Bool, statusColor: NSColor?,
-         onSelect: @escaping (Int) -> Void, onClose: @escaping (Int) -> Void) {
-        self.index = index
-        self.onSelect = onSelect
-        self.onClose = onClose
-        self.closeBtn = NSButton(frame: NSRect(x: 0, y: 10, width: 18, height: 18))
-        super.init(frame: .zero)
-        wantsLayer = true
-
-        let theme = ChromeTheme.current
-        layer?.cornerRadius = 6
-        if let color = statusColor {
-            layer?.backgroundColor = color.withAlphaComponent(0.45).cgColor
-        } else if isActive {
-            layer?.backgroundColor = (theme?.activeBackground ?? SessionTabBar.activeTabColor).cgColor
-        } else {
-            layer?.backgroundColor = NSColor.clear.cgColor
-        }
-        // Active tab merges into the detail row below it — square the bottom corners.
-        if isActive {
-            layer?.maskedCorners = [.layerMaxXMaxYCorner, .layerMinXMaxYCorner]
-        }
-
-        // Two-line layout: repo name (top) + session name (bottom)
-        let totalHeight: CGFloat = 38
-        let repoY: CGFloat = 20
-        let wsY: CGFloat = 4
-
-        let primaryText = theme?.foreground ?? .labelColor
-        let secondaryText = theme?.mutedForeground ?? .secondaryLabelColor
-
-        let repoLabel = NSTextField(labelWithString: repoName)
-        repoLabel.font = .systemFont(ofSize: 10)
-        repoLabel.textColor = secondaryText
-        repoLabel.lineBreakMode = .byTruncatingTail
-        repoLabel.frame = NSRect(x: 8, y: repoY, width: 140, height: 14)
-        addSubview(repoLabel)
-
-        let wsLabel = NSTextField(labelWithString: sessionName)
-        wsLabel.font = .systemFont(ofSize: 14, weight: isActive ? .semibold : .regular)
-        wsLabel.textColor = isActive ? primaryText : secondaryText
-        wsLabel.lineBreakMode = .byTruncatingTail
-        wsLabel.frame = NSRect(x: 8, y: wsY, width: 140, height: 17)
-        addSubview(wsLabel)
-
-        closeBtn.image = NSImage(systemSymbolName: "xmark", accessibilityDescription: "Detach session")
-        closeBtn.imagePosition = .imageOnly
-        closeBtn.isBordered = false
-        closeBtn.contentTintColor = secondaryText
-        closeBtn.target = self
-        closeBtn.action = #selector(closeClicked)
-        closeBtn.imageScaling = .scaleProportionallyDown
-        closeBtn.isHidden = true
-        closeBtn.toolTip = "Detach Session"
-        closeBtn.frame = NSRect(x: 0, y: (totalHeight - 18) / 2, width: 18, height: 18)
-        addSubview(closeBtn)
-
-        let textWidth = max(
-            repoLabel.intrinsicContentSize.width,
-            wsLabel.intrinsicContentSize.width
-        )
-        let width = min(textWidth + 38, 200)
-        frame.size = NSSize(width: width, height: totalHeight)
-        repoLabel.frame.size.width = width - 34
-        wsLabel.frame.size.width = width - 34
-        closeBtn.frame.origin.x = width - 22
-    }
-
-    static func color(for state: PRState) -> NSColor {
-        switch state {
-        case .open:   return .systemGreen
-        case .draft:  return .systemGray
-        case .merged: return .systemPurple
-        case .closed: return .systemRed
-        }
-    }
-
-    static func stateLabel(for state: PRState) -> String {
-        switch state {
-        case .open:   return "Open"
-        case .draft:  return "Draft"
-        case .merged: return "Merged"
-        case .closed: return "Closed"
-        }
-    }
-
-    @available(*, unavailable)
-    required init?(coder: NSCoder) { fatalError() }
-
-    override func updateTrackingAreas() {
-        super.updateTrackingAreas()
-        if let ta = trackingArea { removeTrackingArea(ta) }
-        trackingArea = NSTrackingArea(rect: bounds, options: [.mouseEnteredAndExited, .activeInActiveApp], owner: self)
-        addTrackingArea(trackingArea!)
-    }
-
-    override func mouseEntered(with event: NSEvent) { closeBtn.isHidden = false }
-    override func mouseExited(with event: NSEvent) { closeBtn.isHidden = true }
-
-    override func mouseDown(with event: NSEvent) {
-        let loc = convert(event.locationInWindow, from: nil)
-        if loc.x < frame.width - 22 {
-            onSelect(index)
-        }
-    }
-
-    @objc private func closeClicked() { onClose(index) }
-}
-
 // MARK: - Window Controller
 
 class SessionWindowController: NSWindowController {
     private var sessions: [Session] = []
     private var activeIndex: Int = -1
-    private let sessionTabBar = SessionTabBar(frame: .zero)
+    private let sessionStrip = SessionStrip(frame: .zero)
+    private let statusBar = NeetlyStatusBar(frame: .zero)
     private let contentArea = NSView()
+    private var activeCommitURL: URL?
     private var prRefreshTimer: Timer?
     private var diffStatsTimer: Timer?
     var onNewSession: (() -> Void)?
@@ -565,13 +184,20 @@ class SessionWindowController: NSWindowController {
     init() {
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 1200, height: 800),
-            styleMask: [.titled, .closable, .miniaturizable, .resizable],
+            styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
             backing: .buffered,
             defer: false
         )
         window.title = "neetly"
         window.center()
         window.setFrameAutosaveName("SessionWindow")
+        // The design is dark-mode-first with its own breadcrumb title bar. Pin
+        // the window to dark and make the native title bar transparent so our
+        // custom top bar fills it (the native traffic lights stay on top-left).
+        window.appearance = NSAppearance(named: .darkAqua)
+        window.backgroundColor = Theme.bg0
+        window.titlebarAppearsTransparent = true
+        window.titleVisibility = .hidden
         super.init(window: window)
         setupLayout()
         applyWindowTheme()
@@ -584,52 +210,66 @@ class SessionWindowController: NSWindowController {
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError() }
 
-    /// Themes the window — titlebar, background, light/dark appearance — to
-    /// match the picked terminal theme, or restores the system look.
+    deinit { NotificationCenter.default.removeObserver(self) }
+
+    /// Match the window appearance/background to the picked terminal theme
+    /// (or the dark design palette for Neetly Default).
     private func applyWindowTheme() {
         guard let window else { return }
-        if let theme = ChromeTheme.current {
-            window.appearance = NSAppearance(named: theme.isDark ? .darkAqua : .aqua)
-            window.titlebarAppearsTransparent = true
-            window.backgroundColor = theme.background
-            contentArea.layer?.backgroundColor = theme.background.cgColor
-        } else {
-            window.appearance = nil
-            window.titlebarAppearsTransparent = false
-            window.backgroundColor = .windowBackgroundColor
-            contentArea.layer?.backgroundColor = NSColor.windowBackgroundColor.cgColor
-        }
+        let dark = ChromeTheme.current?.isDark ?? true  // design palette is dark
+        window.appearance = NSAppearance(named: dark ? .darkAqua : .aqua)
+        window.backgroundColor = Theme.bg0
+        contentArea.layer?.backgroundColor = Theme.bg0.cgColor
     }
 
     @objc private func themeChanged() {
         applyWindowTheme()
-        sessionTabBar.applyChromeTheme()
+        sessionStrip.applyTheme()
+        statusBar.applyTheme()
         refreshTabBar()
+        getSplitTree()?.applyTheme()
     }
 
     private func setupLayout() {
         guard let contentView = window?.contentView else { return }
 
-        sessionTabBar.translatesAutoresizingMaskIntoConstraints = false
-        sessionTabBar.onSelectSession = { [weak self] i in self?.selectSession(at: i) }
-        sessionTabBar.onCloseSession = { [weak self] i in self?.closeSession(at: i) }
-        sessionTabBar.onNewSession = { [weak self] in self?.onNewSession?() }
-        contentView.addSubview(sessionTabBar)
+        // Session strip (top) — horizontal session tabs; sits in the transparent
+        // title-bar region so the native traffic lights show through on the left.
+        sessionStrip.translatesAutoresizingMaskIntoConstraints = false
+        sessionStrip.onSelectSession = { [weak self] i in self?.selectSession(at: i) }
+        sessionStrip.onCloseSession = { [weak self] i in self?.closeSession(at: i) }
+        sessionStrip.onNewSession = { [weak self] in self?.onNewSession?() }
+        contentView.addSubview(sessionStrip)
 
+        // Workspace — holds the active session's split tree.
         contentArea.translatesAutoresizingMaskIntoConstraints = false
         contentArea.wantsLayer = true
+        contentArea.layer?.backgroundColor = Theme.bg0.cgColor
         contentView.addSubview(contentArea)
 
-        NSLayoutConstraint.activate([
-            sessionTabBar.topAnchor.constraint(equalTo: contentView.topAnchor),
-            sessionTabBar.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
-            sessionTabBar.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
-            sessionTabBar.heightAnchor.constraint(equalToConstant: 75),
+        // Status footer (bottom) — branch / diff / commit / PR.
+        statusBar.translatesAutoresizingMaskIntoConstraints = false
+        statusBar.onOpenCommit = { [weak self] in
+            if let url = self?.activeCommitURL { NSWorkspace.shared.open(url) }
+        }
+        statusBar.onOpenPR = { url in NSWorkspace.shared.open(url) }
+        contentView.addSubview(statusBar)
 
-            contentArea.topAnchor.constraint(equalTo: sessionTabBar.bottomAnchor),
+        NSLayoutConstraint.activate([
+            sessionStrip.topAnchor.constraint(equalTo: contentView.topAnchor),
+            sessionStrip.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
+            sessionStrip.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
+            sessionStrip.heightAnchor.constraint(equalToConstant: SessionStrip.barHeight),
+
+            statusBar.bottomAnchor.constraint(equalTo: contentView.bottomAnchor),
+            statusBar.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
+            statusBar.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
+            statusBar.heightAnchor.constraint(equalToConstant: 24),
+
+            contentArea.topAnchor.constraint(equalTo: sessionStrip.bottomAnchor),
             contentArea.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
             contentArea.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
-            contentArea.bottomAnchor.constraint(equalTo: contentView.bottomAnchor),
+            contentArea.bottomAnchor.constraint(equalTo: statusBar.topAnchor),
         ])
     }
 
@@ -704,7 +344,7 @@ class SessionWindowController: NSWindowController {
         }
     }
 
-    private func selectSession(at index: Int) {
+    func selectSession(at index: Int) {
         guard index >= 0 && index < sessions.count else { return }
 
         // Detach every session's splitTree view from contentArea before adding
@@ -734,7 +374,7 @@ class SessionWindowController: NSWindowController {
         }
     }
 
-    private func closeSession(at index: Int) {
+    func closeSession(at index: Int) {
         guard index >= 0 && index < sessions.count else { return }
 
         // Mark as detached (keep in store so it stays in the session list,
@@ -773,16 +413,48 @@ class SessionWindowController: NSWindowController {
     }
 
     private func refreshTabBar() {
-        let tabs = sessions.enumerated().map { (i, ws) in
-            (repoName: ws.config.repoName, sessionName: ws.config.sessionName, commitSha: ws.commitSha, commitURL: ws.commitURL, isActive: i == activeIndex, statusColor: ws.statusColor, prInfos: ws.prInfos, diffStats: ws.diffStats)
+        let rows = sessions.enumerated().map { (i, ws) in
+            SessionRowModel(
+                index: i,
+                repoName: ws.config.repoName,
+                sessionName: ws.config.sessionName,
+                worktreeName: ws.config.worktreeName,
+                repoPath: ws.config.repoPath,
+                commitSha: ws.commitSha,
+                commitURL: ws.commitURL,
+                isActive: i == activeIndex,
+                statusColor: ws.statusColor,
+                prInfos: ws.prInfos,
+                diffStats: ws.diffStats
+            )
         }
-        sessionTabBar.update(sessions: tabs)
+        sessionStrip.update(rows: rows)
+
+        let active = rows.first { $0.isActive }
+        activeCommitURL = active?.commitURL.flatMap { URL(string: $0) }
+        statusBar.update(active: active)
     }
 
     /// Get the active session's split tree for menu actions.
     func getSplitTree() -> SplitTreeController? {
         guard activeIndex >= 0 && activeIndex < sessions.count else { return nil }
         return sessions[activeIndex].splitTree
+    }
+
+    /// Open session count and active index, for keyboard session navigation.
+    func sessionCount() -> Int { sessions.count }
+    func activeSessionIndex() -> Int { activeIndex }
+
+    /// Launch-screen helper: the live Claude state of the session whose worktree
+    /// is `repoPath`. Returns `.idle` when that session isn't currently open, so
+    /// the launch screen never shows a fabricated state.
+    func launchState(repoPath: String) -> LaunchSessionState {
+        guard let ws = sessions.first(where: { $0.config.repoPath == repoPath }) else { return .idle }
+        guard let color = ws.statusColor else { return .active }
+        if color == Theme.green { return .done }
+        if color == Theme.red { return .awaiting }
+        if color == Theme.amber { return .working }
+        return .active
     }
 
     // MARK: - Socket Command Handling
@@ -833,13 +505,14 @@ class SessionWindowController: NSWindowController {
 
             let color: NSColor
             switch colorName {
-            case "green": color = NSColor(red: 0.0, green: 0.5, blue: 0.0, alpha: 1.0)
-            case "red": color = .systemRed
-            case "yellow": color = .systemYellow
-            case "blue": color = .systemBlue
-            case "orange": color = .systemOrange
+            // Design palette: done = green, needs-input = red, working = amber.
+            case "green": color = Theme.green
+            case "red": color = Theme.red
+            case "yellow": color = Theme.amber
+            case "blue": color = Theme.accent
+            case "orange": color = Theme.amber
             case "clear", "none", "reset": ws.statusColor = nil; ws.onStatusChanged?(); return nil
-            default: color = .systemGreen
+            default: color = Theme.green
             }
             ws.statusColor = color
             ws.onStatusChanged?()

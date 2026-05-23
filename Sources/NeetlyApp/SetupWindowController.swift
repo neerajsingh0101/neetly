@@ -13,6 +13,9 @@ class SetupWindowController: NSWindowController {
         )
         window.title = "neetly"
         window.center()
+        // Dark-mode-first, matching the session window and the rest of the app.
+        window.appearance = NSAppearance(named: .darkAqua)
+        window.backgroundColor = Theme.bg0
         self.init(window: window)
 
         let setupView = SetupView(initialScreen: initialScreen) { [weak self] config in

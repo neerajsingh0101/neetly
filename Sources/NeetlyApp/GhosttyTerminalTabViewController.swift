@@ -27,6 +27,12 @@ final class GhosttyTerminalTabViewController: NSViewController, TerminalTab {
     /// force each surface to repaint after a config change.
     private static let liveInstances = NSHashTable<GhosttyTerminalTabViewController>.weakObjects()
 
+    /// The config passed to `TerminalController(configuration:)` at init isn't
+    /// honored by libghostty (it's merged over a base config and rejected — the
+    /// same issue `reloadConfiguration` documents), so the first terminal pushes
+    /// the clean rendered config once. See `viewDidLoad`.
+    private static var didApplyInitialConfig = false
+
     /// Builds the ghostty terminal configuration from Neetly's
     /// `~/.config/neetly/terminal.json`, so ghostty matches the app's look.
     static func makeConfiguration() -> TerminalConfiguration {
@@ -34,7 +40,19 @@ final class GhosttyTerminalTabViewController: NSViewController, TerminalTab {
         return TerminalConfiguration { builder in
             builder.withFontFamily(cfg.fontFamily ?? "JetBrains Mono")
             builder.withFontSize(Float(cfg.fontSize ?? 17))
-            if let themeName = cfg.theme,
+            if cfg.theme == TerminalConfig.neetlyThemeName {
+                // The built-in Neetly theme — the app's design tokens as a
+                // ghostty palette, so terminal content matches the chrome.
+                builder.withBackground(NeetlyTerminalTheme.background)
+                builder.withForeground(NeetlyTerminalTheme.foreground)
+                builder.withCursorColor(NeetlyTerminalTheme.cursor)
+                builder.withSelectionBackground(NeetlyTerminalTheme.selection)
+                for index in NeetlyTerminalTheme.palette.keys.sorted() {
+                    if let color = NeetlyTerminalTheme.palette[index] {
+                        builder.withPalette(index, color: color)
+                    }
+                }
+            } else if let themeName = cfg.theme,
                let theme = GhosttyThemeCatalog.theme(named: themeName) {
                 // A picked theme owns every color. Theme hex values are bare
                 // ("1e1e2e"); ghostty config wants a leading "#".
@@ -123,6 +141,14 @@ final class GhosttyTerminalTabViewController: NSViewController, TerminalTab {
         )
         terminalView.controller = Self.sharedController
         Self.liveInstances.add(self)
+
+        // Apply the themed config once the first surface exists. Without this,
+        // the terminal starts with ghostty's default colors (the init-time
+        // configuration isn't applied) until the user changes the theme.
+        if !Self.didApplyInitialConfig {
+            Self.didApplyInitialConfig = true
+            DispatchQueue.main.async { Self.reloadConfiguration() }
+        }
     }
 
     override func viewDidAppear() {

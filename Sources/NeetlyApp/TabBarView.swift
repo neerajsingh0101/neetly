@@ -2,6 +2,7 @@ import AppKit
 
 /// Chrome-style horizontal tab bar at the top of each pane.
 class TabBarView: NSView {
+    static let barHeight: CGFloat = 30
     var onSelectTab: ((Int) -> Void)?
     var onCloseTab: ((Int) -> Void)?
     var onNewTerminal: (() -> Void)?
@@ -19,56 +20,31 @@ class TabBarView: NSView {
     override init(frame: NSRect) {
         super.init(frame: frame)
         wantsLayer = true
+        layer?.backgroundColor = Theme.bg0.cgColor
 
-        // "+Terminal" button — right-aligned
-        newTerminalButton.title = ">_"
-        newTerminalButton.toolTip = "New Terminal"
-        newTerminalButton.isBordered = false
-        newTerminalButton.font = .systemFont(ofSize: 11, weight: .medium)
-        newTerminalButton.target = self
-        newTerminalButton.action = #selector(newTerminalClicked)
-        newTerminalButton.translatesAutoresizingMaskIntoConstraints = false
-        addSubview(newTerminalButton)
+        // Borderless, muted icon buttons — the cmux-style pane action row.
+        func styleIconButton(_ button: NSButton, symbol: String, tip: String, action: Selector) {
+            button.image = Theme.symbol(symbol, size: 12.5)
+            button.toolTip = tip
+            button.isBordered = false
+            button.imagePosition = .imageOnly
+            button.contentTintColor = Theme.fg3
+            button.target = self
+            button.action = action
+            button.translatesAutoresizingMaskIntoConstraints = false
+            addSubview(button)
+        }
 
-        // "+Browser" button — right of terminal button
-        newBrowserButton.image = NSImage(systemSymbolName: "globe", accessibilityDescription: "New Browser")
-        newBrowserButton.toolTip = "New Browser"
-        newBrowserButton.isBordered = false
-        newBrowserButton.imagePosition = .imageOnly
-        newBrowserButton.target = self
-        newBrowserButton.action = #selector(newBrowserClicked)
-        newBrowserButton.translatesAutoresizingMaskIntoConstraints = false
-        addSubview(newBrowserButton)
-
-        // Split columns button
-        splitColButton.image = NSImage(systemSymbolName: "rectangle.split.2x1", accessibilityDescription: "Split into Columns")
-        splitColButton.toolTip = "Split into Columns"
-        splitColButton.isBordered = false
-        splitColButton.imagePosition = .imageOnly
-        splitColButton.target = self
-        splitColButton.action = #selector(splitColClicked)
-        splitColButton.translatesAutoresizingMaskIntoConstraints = false
-        addSubview(splitColButton)
-
-        // Split rows button
-        splitRowButton.image = NSImage(systemSymbolName: "rectangle.split.1x2", accessibilityDescription: "Split into Rows")
-        splitRowButton.toolTip = "Split into Rows"
-        splitRowButton.isBordered = false
-        splitRowButton.imagePosition = .imageOnly
-        splitRowButton.target = self
-        splitRowButton.action = #selector(splitRowClicked)
-        splitRowButton.translatesAutoresizingMaskIntoConstraints = false
-        addSubview(splitRowButton)
-
-        // Maximize button
-        maximizeButton.image = NSImage(systemSymbolName: "arrow.up.left.and.arrow.down.right", accessibilityDescription: "Maximize")
-        maximizeButton.toolTip = "Maximize (Cmd+Shift+M)"
-        maximizeButton.isBordered = false
-        maximizeButton.imagePosition = .imageOnly
-        maximizeButton.target = self
-        maximizeButton.action = #selector(maximizeClicked)
-        maximizeButton.translatesAutoresizingMaskIntoConstraints = false
-        addSubview(maximizeButton)
+        styleIconButton(newTerminalButton, symbol: "terminal",
+                        tip: "New Terminal", action: #selector(newTerminalClicked))
+        styleIconButton(newBrowserButton, symbol: "globe",
+                        tip: "New Browser", action: #selector(newBrowserClicked))
+        styleIconButton(splitColButton, symbol: "rectangle.split.2x1",
+                        tip: "Split into Columns", action: #selector(splitColClicked))
+        styleIconButton(splitRowButton, symbol: "rectangle.split.1x2",
+                        tip: "Split into Rows", action: #selector(splitRowClicked))
+        styleIconButton(maximizeButton, symbol: "arrow.up.left.and.arrow.down.right",
+                        tip: "Maximize (Cmd+Shift+M)", action: #selector(maximizeClicked))
 
         NSLayoutConstraint.activate([
             maximizeButton.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -2),
@@ -96,51 +72,38 @@ class TabBarView: NSView {
             newTerminalButton.widthAnchor.constraint(equalToConstant: 26),
             newTerminalButton.heightAnchor.constraint(equalToConstant: 20),
         ])
-
-        applyChromeTheme()
     }
 
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError() }
 
-    /// Paints the bar background and tints the action buttons from the picked
-    /// theme. Called at the end of init and on `.neetlyThemeChanged`.
-    func applyChromeTheme() {
-        let theme = ChromeTheme.current
-        layer?.backgroundColor = (theme?.background ?? .controlBackgroundColor).cgColor
-        // Icons take the theme's foreground (Apple Classic's amber, for
-        // example) — palette[4] (the accent) is reserved for the active-tab
-        // highlight, matching Muxy.
-        let iconColor = theme?.foreground ?? .labelColor
-        for btn in [newBrowserButton, splitColButton, splitRowButton, maximizeButton] {
-            btn.contentTintColor = iconColor
-        }
-        newTerminalButton.attributedTitle = NSAttributedString(
-            string: ">_",
-            attributes: [
-                .font: NSFont.systemFont(ofSize: 11, weight: .medium),
-                .foregroundColor: iconColor,
-            ]
-        )
-        needsDisplay = true
-    }
-
     func update(tabs: [(title: String, icon: NSImage?, isActive: Bool)]) {
         buttons.forEach { $0.removeFromSuperview() }
         buttons.removeAll()
 
-        var x: CGFloat = 2
+        var x: CGFloat = 4
         for (i, tab) in tabs.enumerated() {
             let tabView = TabButton(
                 index: i, title: tab.title, icon: tab.icon, isActive: tab.isActive,
+                height: Self.barHeight,
                 onSelect: { [weak self] idx in self?.onSelectTab?(idx) },
                 onClose: { [weak self] idx in self?.onCloseTab?(idx) }
             )
-            tabView.frame.origin = CGPoint(x: x, y: 2)
+            tabView.frame.origin = CGPoint(x: x, y: 0)
             addSubview(tabView)
             buttons.append(tabView)
-            x += tabView.frame.width + 2
+            x += tabView.frame.width
         }
+    }
+
+    /// Re-apply themed colors after a theme change. Tab buttons are rebuilt by
+    /// the owning pane's `refreshTabBar()`; this handles the bar's own chrome.
+    func applyTheme() {
+        layer?.backgroundColor = Theme.bg0.cgColor
+        for btn in [newTerminalButton, newBrowserButton, splitColButton, splitRowButton, maximizeButton] {
+            btn.contentTintColor = Theme.fg3
+        }
+        needsDisplay = true
     }
 
     @objc private func newTerminalClicked() {
@@ -176,8 +139,8 @@ class TabBarView: NSView {
 
     override func draw(_ dirtyRect: NSRect) {
         super.draw(dirtyRect)
-        // Bottom border
-        (ChromeTheme.current?.border ?? NSColor.separatorColor).setFill()
+        // Bottom hairline
+        Theme.line1.setFill()
         NSRect(x: 0, y: 0, width: bounds.width, height: 1).fill()
     }
 }
@@ -190,99 +153,103 @@ private class TabButton: NSView {
     private let closeBtn: NSButton
     private var trackingArea: NSTrackingArea?
 
-    init(index: Int, title: String, icon: NSImage?, isActive: Bool,
+    init(index: Int, title: String, icon: NSImage?, isActive: Bool, height: CGFloat,
          onSelect: @escaping (Int) -> Void, onClose: @escaping (Int) -> Void) {
         self.tabIndex = index
         self.isActive = isActive
         self.onSelect = onSelect
         self.onClose = onClose
-        self.closeBtn = NSButton(frame: NSRect(x: 0, y: 3, width: 18, height: 18))
+        self.closeBtn = NSButton(frame: .zero)
         super.init(frame: .zero)
         wantsLayer = true
-        layer?.cornerRadius = 4
+        applyBackground(hover: false)
 
-        let theme = ChromeTheme.current
-        if isActive {
-            let activeColor = (theme?.accent ?? .controlAccentColor).withAlphaComponent(0.15)
-            layer?.backgroundColor = activeColor.cgColor
-        } else {
-            layer?.backgroundColor = NSColor.clear.cgColor
-        }
-
-        // Icon — keep template SF Symbols template-y (don't rasterize via
-        // lockFocus) so contentTintColor takes effect; favicons (non-template)
-        // render as-is.
-        var x: CGFloat = 6
+        // Icon — tint template symbols (terminal/globe); leave real favicons in color.
+        var x: CGFloat = 10
         if let icon = icon {
-            let iconView = NSImageView(frame: NSRect(x: x, y: 5, width: 14, height: 14))
+            let iconView = NSImageView(frame: NSRect(x: x, y: (height - 13) / 2, width: 13, height: 13))
             iconView.image = icon
-            iconView.imageScaling = .scaleProportionallyDown
-            iconView.contentTintColor = theme?.foreground ?? .labelColor
+            iconView.imageScaling = .scaleProportionallyUpOrDown
+            if icon.isTemplate {
+                iconView.contentTintColor = isActive ? Theme.fg1 : Theme.fg3
+            }
             addSubview(iconView)
-            x += 18
+            x += 17
         }
 
-        // Title
+        // Title — monospaced, matching the terminal-app pane header.
         let label = NSTextField(labelWithString: title)
-        label.font = .systemFont(ofSize: 11, weight: isActive ? .semibold : .regular)
-        label.textColor = isActive
-            ? (theme?.foreground ?? .labelColor)
-            : (theme?.mutedForeground ?? .secondaryLabelColor)
+        label.font = Theme.mono(11, weight: isActive ? .medium : .regular)
+        label.textColor = isActive ? Theme.fg1 : Theme.fg3
         label.lineBreakMode = .byTruncatingTail
-        label.frame = NSRect(x: x, y: 4, width: 90, height: 16)
+        label.frame = NSRect(x: x, y: (height - 16) / 2, width: 90, height: 16)
         addSubview(label)
 
         // Close button — hidden by default, shown on hover
-        closeBtn.image = NSImage(systemSymbolName: "xmark", accessibilityDescription: "Close tab")
+        closeBtn.image = Theme.symbol("xmark", size: 9.5)
         closeBtn.imagePosition = .imageOnly
         closeBtn.isBordered = false
-        closeBtn.contentTintColor = theme?.mutedForeground ?? .secondaryLabelColor
+        closeBtn.contentTintColor = Theme.fg3
         closeBtn.target = self
         closeBtn.action = #selector(closeClicked)
         closeBtn.imageScaling = .scaleProportionallyDown
         closeBtn.isHidden = true
         closeBtn.toolTip = "Close Tab (Cmd+W)"
-        let closeX = x + label.frame.width + 4
-        closeBtn.frame.origin.x = closeX
         addSubview(closeBtn)
 
-        frame.size = NSSize(width: closeX + 22, height: 24)
+        let closeX = x + label.frame.width + 4
+        let rawWidth = closeX + 24
+        let width = min(max(rawWidth, 96), 180)
+        frame.size = NSSize(width: width, height: height)
+        label.frame.size.width = width - x - 26
+        closeBtn.frame = NSRect(x: width - 24, y: (height - 16) / 2, width: 16, height: 16)
 
-        // Clamp width
-        let minW: CGFloat = 80
-        let maxW: CGFloat = 160
-        frame.size.width = min(max(frame.width, minW), maxW)
-
-        // Adjust label width to fit
-        label.frame.size.width = frame.width - x - 26
-        closeBtn.frame.origin.x = frame.width - 22
+        // Active tab: a thin accent underline at the bottom — consistent with
+        // the session strip — instead of a chunky filled pill.
+        if isActive {
+            let underline = NSView(frame: NSRect(x: 0, y: 1, width: width, height: 2))
+            underline.autoresizingMask = [.width]
+            underline.wantsLayer = true
+            underline.layer?.backgroundColor = Theme.accent.cgColor
+            addSubview(underline)
+        }
     }
 
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError() }
+
+    private func applyBackground(hover: Bool) {
+        if isActive {
+            layer?.backgroundColor = Theme.bg2.cgColor
+        } else {
+            layer?.backgroundColor = (hover ? Theme.bg2 : NSColor.clear).cgColor
+        }
+    }
 
     override func updateTrackingAreas() {
         super.updateTrackingAreas()
         if let ta = trackingArea { removeTrackingArea(ta) }
         trackingArea = NSTrackingArea(
             rect: bounds,
-            options: [.mouseEnteredAndExited, .activeInActiveApp],
+            options: [.mouseEnteredAndExited, .activeInActiveApp, .inVisibleRect],
             owner: self
         )
         addTrackingArea(trackingArea!)
     }
 
     override func mouseEntered(with event: NSEvent) {
+        if !isActive { applyBackground(hover: true) }
         closeBtn.isHidden = false
     }
 
     override func mouseExited(with event: NSEvent) {
+        if !isActive { applyBackground(hover: false) }
         closeBtn.isHidden = true
     }
 
     override func mouseDown(with event: NSEvent) {
         let loc = convert(event.locationInWindow, from: nil)
-        if loc.x < frame.width - 22 {
+        if loc.x < frame.width - 24 {
             onSelect(tabIndex)
         }
     }

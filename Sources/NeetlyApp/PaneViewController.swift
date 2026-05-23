@@ -28,33 +28,18 @@ class PaneViewController: NSViewController {
         self.repoPath = repoPath
         self.socketServer = socketServer
         super.init(nibName: nil, bundle: nil)
-        NotificationCenter.default.addObserver(
-            self, selector: #selector(themeChanged),
-            name: .neetlyThemeChanged, object: nil
-        )
     }
 
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError() }
 
-    /// Paints the pane background from the picked theme, so the area around
-    /// the terminal matches when the window isn't filled by terminal pixels.
-    private func applyChromeTheme() {
-        guard isViewLoaded else { return }
-        let bg = (ChromeTheme.current?.background ?? .windowBackgroundColor).cgColor
-        view.layer?.backgroundColor = bg
-        contentView.layer?.backgroundColor = bg
-    }
-
-    @objc private func themeChanged() {
-        applyChromeTheme()
-        tabBar.applyChromeTheme()
-        refreshTabBar()
-    }
-
     override func loadView() {
         let container = NSView()
         container.wantsLayer = true
+        container.layer?.backgroundColor = Theme.bg1.cgColor
+
+        contentView.wantsLayer = true
+        contentView.layer?.backgroundColor = Theme.bg1.cgColor
 
         tabBar.translatesAutoresizingMaskIntoConstraints = false
         tabBar.onSelectTab = { [weak self] index in
@@ -81,7 +66,6 @@ class PaneViewController: NSViewController {
         container.addSubview(tabBar)
 
         contentView.translatesAutoresizingMaskIntoConstraints = false
-        contentView.wantsLayer = true
         container.addSubview(contentView)
 
         NSLayoutConstraint.activate([
@@ -97,7 +81,6 @@ class PaneViewController: NSViewController {
         ])
 
         view = container
-        applyChromeTheme()
     }
 
     // MARK: - Tab Management
@@ -176,12 +159,41 @@ class PaneViewController: NSViewController {
         // Trigger viewDidAppear for the tab
         vc.viewDidAppear()
 
-        // Focus the content
+        // Focus the content so the firstResponder lands in this pane.
         if let termVC = vc as? (any TerminalTab) {
             termVC.focusTerminal()
+        } else if let browserVC = vc as? BrowserTabViewController {
+            browserVC.focusContent()
         }
 
         refreshTabBar()
+    }
+
+    private var isFocusedPane = false
+    /// Show/hide the focused-pane accent border (driven by SplitTreeController).
+    /// Idempotent, so it's cheap to call on every window update.
+    func setFocused(_ isFocused: Bool) {
+        guard isViewLoaded, isFocused != isFocusedPane else { return }
+        isFocusedPane = isFocused
+        // Subtle: a thin, half-opacity accent so the active pane reads quietly.
+        view.layer?.borderColor = Theme.accent.withAlphaComponent(0.5).cgColor
+        view.layer?.borderWidth = isFocused ? 1 : 0
+    }
+
+    /// Re-apply themed colors after a theme change: pane backgrounds, the tab
+    /// bar, the rebuilt tab buttons, and any browser tabs' toolbars.
+    func applyTheme() {
+        guard isViewLoaded else { return }
+        view.layer?.backgroundColor = Theme.bg1.cgColor
+        contentView.layer?.backgroundColor = Theme.bg1.cgColor
+        if isFocusedPane {
+            view.layer?.borderColor = Theme.accent.withAlphaComponent(0.5).cgColor
+        }
+        tabBar.applyTheme()
+        refreshTabBar()
+        for tab in tabs {
+            (tab.viewController as? BrowserTabViewController)?.applyTheme()
+        }
     }
 
     func closeTab(at index: Int) {
@@ -311,11 +323,11 @@ class PaneViewController: NSViewController {
             case .terminal:
                 let termCmd = (tab.viewController as! (any TerminalTab)).command
                 title = termCmd.isEmpty ? "Terminal" : termCmd
-                icon = NSImage(systemSymbolName: "terminal", accessibilityDescription: nil)
+                icon = Theme.symbol("terminal", size: 12)
             case .browser:
                 let vc = tab.viewController as! BrowserTabViewController
                 title = vc.currentTitle
-                icon = vc.favicon ?? NSImage(systemSymbolName: "globe", accessibilityDescription: nil)
+                icon = vc.favicon ?? Theme.symbol("globe", size: 12)
             }
             return (title: title, icon: icon, isActive: i == activeTabIndex)
         }
