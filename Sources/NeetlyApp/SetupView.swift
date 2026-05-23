@@ -25,15 +25,39 @@ struct SetupView: View {
     }
 
     var body: some View {
+        screenContent
+            .background(Theme.bg0C)
+            .tint(Theme.accentC)
+            .preferredColorScheme(.dark)
+    }
+
+    @ViewBuilder
+    private var screenContent: some View {
         switch screen {
         case .repoList:
             RepoListScreen(
                 repos: $repos,
-                onSelectRepo: { repo in screen = .sessionList(repo) },
                 onAddRepo: { screen = .addRepo },
                 onEditLayout: { repo in screen = .editLayout(repo) },
                 onSettings: { screen = .settings },
-                onActivities: { screen = .activities }
+                onActivities: { screen = .activities },
+                onNewSession: { repo in screen = .sessionName(repo) },
+                onLaunchSession: { repo, sessionName, worktreeName in
+                    let parser = LayoutParser()
+                    let dedented = dedent(repo.layoutText)
+                    guard let layout = parser.parse(dedented) else { return }
+                    let worktreePath = GitWorktree.worktreePath(repoName: repo.name, worktreeName: worktreeName)
+                    let config = SessionConfig(
+                        repoPath: worktreePath,
+                        repoName: repo.name,
+                        sessionName: sessionName,
+                        worktreeName: worktreeName,
+                        layout: layout,
+                        layoutText: repo.layoutText,
+                        autoReloadOnFileChange: true
+                    )
+                    onLaunch(config)
+                }
             )
             .onAppear { repos = RepoStore.shared.load() }
 
@@ -160,116 +184,387 @@ private struct WindowHeightSizer: NSViewRepresentable {
 
 struct RepoListScreen: View {
     @Binding var repos: [RepoConfig]
-    var onSelectRepo: (RepoConfig) -> Void
     var onAddRepo: () -> Void
     var onEditLayout: (RepoConfig) -> Void
     var onSettings: () -> Void
     var onActivities: () -> Void
+    var onNewSession: (RepoConfig) -> Void
+    /// (repo, sessionName, worktreeName)
+    var onLaunchSession: (RepoConfig, String, String) -> Void
+
+    @State private var expanded: Set<UUID> = []
+    @State private var sessionsByRepo: [String: [SessionListEntry]] = [:]
+    @State private var pendingDelete: PendingSessionDelete?
+
+    private var sortedRepos: [RepoConfig] {
+        repos.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+    }
+    private var totalSessions: Int { sessionsByRepo.values.reduce(0) { $0 + $1.count } }
+    private var needInput: Int {
+        var n = 0
+        for (repoName, entries) in sessionsByRepo {
+            for e in entries where liveLaunchState(repoName: repoName, worktreeName: e.worktreeName) == .awaiting {
+                n += 1
+            }
+        }
+        return n
+    }
 
     var body: some View {
         VStack(spacing: 0) {
-            // Header
-            VStack(alignment: .trailing, spacing: 10) {
-                HStack {
-                    Text("neetly").font(.system(size: 48, weight: .bold, design: .monospaced))
-                    Spacer()
-                    Button(action: onAddRepo) {
-                        Label("Add Repo", systemImage: "plus")
-                            .font(.system(size: 16, weight: .semibold))
+            header
+            ScrollView {
+                VStack(spacing: 4) {
+                    ForEach(sortedRepos) { repo in
+                        RepoGroupRow(
+                            repo: repo,
+                            sessions: sessionsByRepo[repo.name] ?? [],
+                            isExpanded: expanded.contains(repo.id),
+                            onToggle: { toggle(repo) },
+                            onLaunch: { entry in onLaunchSession(repo, entry.sessionName, entry.worktreeName) },
+                            onNewSession: { onNewSession(repo) },
+                            onEditLayout: { onEditLayout(repo) },
+                            onDeleteRepo: {
+                                RepoStore.shared.remove(id: repo.id)
+                                repos = RepoStore.shared.load()
+                                reload()
+                            },
+                            onDeleteSession: { entry in pendingDelete = PendingSessionDelete(repo: repo, entry: entry) }
+                        )
                     }
-                    .buttonStyle(.borderedProminent)
-                    .controlSize(.large)
                 }
-                HStack(spacing: 16) {
-                    Button(action: onActivities) {
-                        HStack(spacing: 3) {
-                            Image(systemName: "list.bullet.clipboard")
-                            Text("Activities")
-                        }
-                        .font(.system(size: 13))
-                    }
-                    .buttonStyle(.plain)
-                    .help("Activities")
-                    Button(action: onSettings) {
-                        HStack(spacing: 3) {
-                            Image(systemName: "gearshape")
-                            Text("Settings")
-                        }
-                        .font(.system(size: 13))
-                    }
-                    .buttonStyle(.plain)
-                    .help("Settings")
-                }
+                .padding(.horizontal, 24)
+                .padding(.vertical, 8)
             }
-            .padding(20)
+            footer
+        }
+        .frame(minWidth: 720, minHeight: 600)
+        .background(Theme.bg0C)
+        .background(WindowHeightSizer(targetHeight: targetHeight))
+        .onAppear { reload() }
+        .sheet(item: $pendingDelete) { p in
+            DeleteWorktreeSheet(
+                repoName: p.repo.name,
+                sessionName: p.entry.sessionName,
+                worktreeName: p.entry.worktreeName,
+                onCancel: { pendingDelete = nil },
+                onDelete: { performDelete(p) }
+            )
+        }
+    }
 
-            Divider()
+    // MARK: Header
 
-            if repos.isEmpty {
-                Spacer()
-                VStack(spacing: 12) {
-                    Text("No repos added yet")
-                        .font(.system(size: 24, weight: .medium))
-                        .foregroundColor(.secondary)
-                    Text("Click \"Add Repo\" to get started")
-                        .font(.system(size: 16))
-                        .foregroundColor(.secondary)
+    private var header: some View {
+        VStack(spacing: 16) {
+            HStack(alignment: .center) {
+                HStack(spacing: 0) {
+                    Text("neetly")
+                        .font(.system(size: 40, weight: .bold, design: .monospaced))
+                        .foregroundColor(Theme.fg1C)
+                    BlinkingCaret()
                 }
                 Spacer()
-            } else {
-                List {
-                    ForEach(repos.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }) { repo in
-                        Button(action: { onSelectRepo(repo) }) {
-                            HStack {
-                                VStack(alignment: .leading, spacing: 6) {
-                                    HStack(spacing: 8) {
-                                        Text(repo.name)
-                                            .font(.system(size: 24, weight: .semibold))
-                                        Menu {
-                                            Button(action: { onEditLayout(repo) }) {
-                                                Label("Settings", systemImage: "gearshape")
-                                            }
-                                            Divider()
-                                            Button(role: .destructive, action: {
-                                                RepoStore.shared.remove(id: repo.id)
-                                                repos = RepoStore.shared.load()
-                                            }) {
-                                                Label("Delete", systemImage: "trash")
-                                            }
-                                        } label: {
-                                            Image(systemName: "ellipsis")
-                                                .font(.system(size: 14, weight: .bold))
-                                                .foregroundColor(.primary.opacity(0.6))
-                                                .frame(width: 26, height: 26)
-                                                .background(
-                                                    RoundedRectangle(cornerRadius: 5)
-                                                        .fill(Color.primary.opacity(0.001))
-                                                )
-                                                .contentShape(Rectangle())
-                                        }
-                                        .buttonStyle(HoverButtonStyle())
-                                    }
-                                    Text(repo.path.replacingOccurrences(of: FileManager.default.homeDirectoryForCurrentUser.path, with: "~"))
-                                        .font(.system(size: 19, design: .monospaced))
-                                        .foregroundColor(.secondary)
-                                }
-                                Spacer()
-                                Image(systemName: "chevron.right")
-                                    .font(.system(size: 13, weight: .semibold))
-                                    .foregroundColor(.secondary)
-                            }
-                            .contentShape(Rectangle())
-                            .padding(.vertical, 4)
-                        }
-                        .buttonStyle(.plain)
+                Button(action: onAddRepo) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "plus").foregroundColor(Theme.accentC)
+                        Text("Add Repo").foregroundColor(Theme.fg1C)
                     }
+                    .font(.system(size: 14, weight: .medium))
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 9)
+                    .background(RoundedRectangle(cornerRadius: 10).fill(Theme.bg2C))
+                    .overlay(RoundedRectangle(cornerRadius: 10).stroke(Theme.line2C, lineWidth: 1))
                 }
+                .buttonStyle(.plain)
+            }
+
+            HStack(spacing: 18) {
+                textButton("list.bullet.clipboard", "Activities", action: onActivities)
+                textButton("gearshape", "Settings", action: onSettings)
+                Spacer()
+                summary
             }
         }
-        .frame(minWidth: 700, minHeight: 600)
-        // Header + divider + list chrome ≈ 170pt; each row ≈ 80pt.
-        // Overshooting is safe — WindowHeightSizer clamps to screen.
-        .background(WindowHeightSizer(targetHeight: 170 + CGFloat(repos.count) * 80))
+        .padding(.horizontal, 24)
+        .padding(.top, 22)
+        .padding(.bottom, 18)
+    }
+
+    private func textButton(_ icon: String, _ label: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 5) {
+                Image(systemName: icon)
+                Text(label)
+            }
+            .font(.system(size: 13))
+            .foregroundColor(Theme.fg3C)
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var summary: some View {
+        HStack(spacing: 0) {
+            Text("\(repos.count) repos · \(totalSessions) sessions")
+                .foregroundColor(Theme.fg3C)
+            if needInput > 0 {
+                Text(" · ").foregroundColor(Theme.fg4C)
+                Text("\(needInput) need input").foregroundColor(Theme.redC)
+            }
+        }
+        .font(.system(size: 13, design: .monospaced))
+    }
+
+    // MARK: Footer
+
+    private var footer: some View {
+        VStack(spacing: 0) {
+            Rectangle().fill(Theme.line1C).frame(height: 1)
+            HStack(spacing: 20) {
+                footerHint("⌘P", "switch")
+                footerHint("⌘T", "new session")
+                footerHint("⌘K", "palette")
+                footerHint("⌘,", "settings")
+                Spacer()
+            }
+            .padding(.horizontal, 24)
+            .padding(.vertical, 12)
+        }
+    }
+
+    private func footerHint(_ key: String, _ label: String) -> some View {
+        HStack(spacing: 5) {
+            Text(key).foregroundColor(Theme.fg3C)
+            Text(label).foregroundColor(Theme.fg4C)
+        }
+        .font(.system(size: 12, design: .monospaced))
+    }
+
+    // MARK: State
+
+    private var targetHeight: CGFloat {
+        var h: CGFloat = 130 + 50  // header + footer
+        for repo in sortedRepos {
+            h += 52
+            if expanded.contains(repo.id) {
+                h += CGFloat((sessionsByRepo[repo.name] ?? []).count) * 40 + 38
+            }
+        }
+        return h + 32
+    }
+
+    private func toggle(_ repo: RepoConfig) {
+        if expanded.contains(repo.id) { expanded.remove(repo.id) } else { expanded.insert(repo.id) }
+    }
+
+    private func reload() {
+        var map: [String: [SessionListEntry]] = [:]
+        for s in SessionStore.shared.load() {
+            map[s.repoName, default: []].append(
+                SessionListEntry(sessionName: s.sessionName, worktreeName: s.worktreeName, prInfo: s.prInfo)
+            )
+        }
+        sessionsByRepo = map
+        // Expand repos that have sessions by default.
+        expanded = Set(repos.filter { !(map[$0.name] ?? []).isEmpty }.map { $0.id })
+    }
+
+    private func performDelete(_ p: PendingSessionDelete) {
+        let worktreeName = p.entry.worktreeName
+        ActivityStore.shared.log(.sessionDeleted, repoName: p.repo.name, detail: p.entry.sessionName)
+        pendingDelete = nil
+
+        let worktreePath = GitWorktree.worktreePath(repoName: p.repo.name, worktreeName: worktreeName)
+        SessionStore.shared.remove(repoPath: worktreePath, worktreeName: worktreeName)
+        if let appDelegate = NSApp.delegate as? AppDelegate {
+            appDelegate.sessionWindowController?.closeSessionByPath(worktreePath)
+        }
+        let repoPath = p.repo.path
+        let repoName = p.repo.name
+        DispatchQueue.global(qos: .userInitiated).async {
+            _ = GitWorktree.deleteWorktree(parentRepoPath: repoPath, repoName: repoName, worktreeName: worktreeName)
+        }
+        reload()
+    }
+}
+
+private struct PendingSessionDelete: Identifiable {
+    let repo: RepoConfig
+    let entry: SessionListEntry
+    var id: String { entry.worktreeName }
+}
+
+// MARK: - Repo group (expandable)
+
+private struct RepoGroupRow: View {
+    let repo: RepoConfig
+    let sessions: [SessionListEntry]
+    let isExpanded: Bool
+    var onToggle: () -> Void
+    var onLaunch: (SessionListEntry) -> Void
+    var onNewSession: () -> Void
+    var onEditLayout: () -> Void
+    var onDeleteRepo: () -> Void
+    var onDeleteSession: (SessionListEntry) -> Void
+
+    private var states: [LaunchSessionState] {
+        sessions.map { liveLaunchState(repoName: repo.name, worktreeName: $0.worktreeName) }
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            Button(action: onToggle) {
+                HStack(spacing: 10) {
+                    Text(repo.name)
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundColor(Theme.fg1C)
+                    Text(repo.path.replacingOccurrences(of: FileManager.default.homeDirectoryForCurrentUser.path, with: "~"))
+                        .font(.system(size: 13, design: .monospaced))
+                        .foregroundColor(Theme.fg4C)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                    Spacer(minLength: 12)
+                    if !sessions.isEmpty {
+                        HStack(spacing: 4) {
+                            ForEach(Array(states.prefix(5).enumerated()), id: \.offset) { _, s in
+                                Circle().fill(launchStateColor(s)).frame(width: 7, height: 7)
+                            }
+                        }
+                        Text("\(sessions.count)")
+                            .font(.system(size: 13, design: .monospaced))
+                            .foregroundColor(Theme.fg4C)
+                    } else {
+                        Text("no sessions")
+                            .font(.system(size: 13, design: .monospaced))
+                            .foregroundColor(Theme.fg4C)
+                    }
+                    Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(Theme.fg4C)
+                }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 13)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .background(RoundedRectangle(cornerRadius: 10).fill(isExpanded ? Theme.bg2C : Color.clear))
+            .contextMenu {
+                Button("Edit Layout\u{2026}", action: onEditLayout)
+                Divider()
+                Button("Delete Repo", role: .destructive, action: onDeleteRepo)
+            }
+
+            if isExpanded {
+                ForEach(sessions) { entry in
+                    LaunchSessionRow(
+                        repoName: repo.name,
+                        entry: entry,
+                        onLaunch: { onLaunch(entry) },
+                        onDelete: { onDeleteSession(entry) }
+                    )
+                }
+                Button(action: onNewSession) {
+                    HStack(spacing: 7) {
+                        Image(systemName: "plus")
+                        Text("new session")
+                    }
+                    .font(.system(size: 13))
+                    .foregroundColor(Theme.fg4C)
+                    .padding(.leading, 42)
+                    .padding(.vertical, 9)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            }
+        }
+    }
+}
+
+private struct LaunchSessionRow: View {
+    let repoName: String
+    let entry: SessionListEntry
+    var onLaunch: () -> Void
+    var onDelete: () -> Void
+    @State private var hovering = false
+
+    private var state: LaunchSessionState {
+        liveLaunchState(repoName: repoName, worktreeName: entry.worktreeName)
+    }
+
+    var body: some View {
+        Button(action: onLaunch) {
+            HStack(spacing: 12) {
+                Circle().fill(launchStateColor(state)).frame(width: 7, height: 7)
+                    .padding(.leading, 28)
+                Text(entry.sessionName)
+                    .font(.system(size: 15))
+                    .foregroundColor(Theme.fg2C)
+                Spacer(minLength: 16)
+                Text(entry.worktreeName)
+                    .font(.system(size: 13, design: .monospaced))
+                    .foregroundColor(Theme.fg4C)
+                    .lineLimit(1)
+                Text(launchStateLabel(state))
+                    .font(.system(size: 13, design: .monospaced))
+                    .foregroundColor(launchStateColor(state))
+                    .frame(width: 72, alignment: .trailing)
+            }
+            .padding(.trailing, 16)
+            .padding(.vertical, 8)
+            .background(hovering ? Theme.bg1C : Color.clear)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering = $0 }
+        .contextMenu {
+            Button("Delete Session", role: .destructive, action: onDelete)
+        }
+    }
+}
+
+// MARK: - Launch-state styling + lookup
+
+private func launchStateColor(_ s: LaunchSessionState) -> Color {
+    switch s {
+    case .done:     return Theme.greenC
+    case .awaiting: return Theme.redC
+    case .working:  return Theme.amberC
+    case .active:   return Theme.accentC
+    case .idle:     return Theme.fg4C
+    }
+}
+
+private func launchStateLabel(_ s: LaunchSessionState) -> String {
+    switch s {
+    case .done:     return "done"
+    case .awaiting: return "awaiting"
+    case .working:  return "working"
+    case .active:   return "active"
+    case .idle:     return "idle"
+    }
+}
+
+/// The live Claude state of a listed session, via the open session window.
+/// Returns `.idle` when the session isn't currently open.
+private func liveLaunchState(repoName: String, worktreeName: String) -> LaunchSessionState {
+    let path = GitWorktree.worktreePath(repoName: repoName, worktreeName: worktreeName)
+    return (NSApp.delegate as? AppDelegate)?.sessionWindowController?.launchState(repoPath: path) ?? .idle
+}
+
+// MARK: - Blinking caret
+
+private struct BlinkingCaret: View {
+    @State private var on = true
+    var body: some View {
+        RoundedRectangle(cornerRadius: 1)
+            .fill(Theme.accentC)
+            .frame(width: 4, height: 32)
+            .padding(.leading, 5)
+            .opacity(on ? 1 : 0)
+            .onReceive(Timer.publish(every: 0.6, on: .main, in: .common).autoconnect()) { _ in
+                on.toggle()
+            }
     }
 }
 
@@ -321,7 +616,7 @@ struct AddRepoScreen: View {
                 TextEditor(text: $layoutConfig)
                     .font(.system(size: 13, design: .monospaced))
                     .frame(minHeight: 150)
-                    .border(Color.gray.opacity(0.3))
+                    .border(Theme.line1C)
             }
 
             if let error = errorMessage {
@@ -434,7 +729,7 @@ struct SessionNameScreen: View {
                 TextEditor(text: $layoutText)
                     .font(.system(size: 15, design: .monospaced))
                     .frame(minHeight: 100)
-                    .border(Color.gray.opacity(0.3))
+                    .border(Theme.line1C)
             }
 
             Spacer()
@@ -546,7 +841,7 @@ struct EditLayoutScreen: View {
 
             TextEditor(text: $layoutText)
                 .font(.system(size: 15, design: .monospaced))
-                .border(Color.gray.opacity(0.3))
+                .border(Theme.line1C)
 
             HStack {
                 Spacer()
@@ -685,8 +980,11 @@ struct SessionListScreen: View {
                             .padding(.vertical, 6)
                         }
                         .buttonStyle(.plain)
+                        .listRowBackground(Color.clear)
                     }
                 }
+                .listStyle(.plain)
+                .scrollContentBackground(.hidden)
             }
         }
         .frame(minWidth: 700, minHeight: 600)
@@ -744,7 +1042,7 @@ struct DeleteWorktreeSheet: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal, 24)
                 .padding(.vertical, 16)
-                .background(Color(white: 0.95))
+                .background(Theme.bg2C)
 
             VStack(alignment: .leading, spacing: 16) {
                 VStack(alignment: .leading, spacing: 8) {
@@ -857,7 +1155,7 @@ struct SettingsScreen: View {
                                 .font(.system(size: 11, weight: .medium, design: .monospaced))
                                 .padding(.horizontal, 6)
                                 .padding(.vertical, 2)
-                                .background(Color.secondary.opacity(0.2))
+                                .background(Theme.bg3C)
                                 .cornerRadius(4)
                         }
                         Text("Opens a terminal in the last pane with this command and maximizes it.")
@@ -879,7 +1177,7 @@ struct SettingsScreen: View {
                                 .font(.system(size: 11, weight: .medium, design: .monospaced))
                                 .padding(.horizontal, 6)
                                 .padding(.vertical, 2)
-                                .background(Color.secondary.opacity(0.2))
+                                .background(Theme.bg3C)
                                 .cornerRadius(4)
                         }
                         Text("Unmaximizes the pane and closes the active tab. This is not configurable.")
@@ -1027,8 +1325,11 @@ struct ActivityScreen: View {
                             }
                         }
                         .padding(.vertical, 4)
+                        .listRowBackground(Color.clear)
                     }
                 }
+                .listStyle(.plain)
+                .scrollContentBackground(.hidden)
             }
         }
         .frame(minWidth: 700, minHeight: 600)
@@ -1044,7 +1345,7 @@ struct ActivityScreen: View {
             HStack(spacing: 0) {
                 Text("Opened PR ")
                 Text(verbatim: "#\(activity.detail)\(state)")
-                    .foregroundColor(.blue)
+                    .foregroundColor(Theme.accentC)
                     .underline()
                     .onTapGesture { NSWorkspace.shared.open(url) }
                     .onHover { h in if h { NSCursor.pointingHand.push() } else { NSCursor.pop() } }
@@ -1065,9 +1366,9 @@ struct ActivityScreen: View {
 
     private func activityColor(_ kind: Activity.Kind) -> Color {
         switch kind {
-        case .sessionCreated: return .green
-        case .sessionDeleted: return .red
-        case .prOpened:         return .purple
+        case .sessionCreated: return Theme.greenC
+        case .sessionDeleted: return Theme.redC
+        case .prOpened:         return Theme.violetC
         }
     }
 
@@ -1106,10 +1407,10 @@ struct PRBadge: View {
 
     private var color: Color {
         switch prInfo.state {
-        case .open:   return .green
-        case .draft:  return .gray
-        case .merged: return .purple
-        case .closed: return .red
+        case .open:   return Theme.greenC
+        case .draft:  return Theme.fg3C
+        case .merged: return Theme.violetC
+        case .closed: return Theme.redC
         }
     }
 

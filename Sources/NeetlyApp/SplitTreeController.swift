@@ -7,6 +7,9 @@ class RatioSplitView: NSSplitView {
     var initialRatio: CGFloat?
     private var didApplyInitialRatio = false
 
+    /// A dark hairline seam between panes, matching the design's pane gap.
+    override var dividerColor: NSColor { Theme.divider }
+
     override func layout() {
         super.layout()
         guard !didApplyInitialRatio, let ratio = initialRatio else { return }
@@ -147,8 +150,8 @@ class SplitTreeController: NSViewController {
         let newPane = makePaneController()
         newPane.addTerminalTab(command: "")
 
-        // Create split view
-        let splitView = NSSplitView()
+        // Create split view (RatioSplitView for the consistent hairline divider)
+        let splitView = RatioSplitView()
         splitView.isVertical = (direction == .columns)
         splitView.dividerStyle = .thin
         splitView.frame = oldView.frame

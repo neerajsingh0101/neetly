@@ -36,6 +36,10 @@ class PaneViewController: NSViewController {
     override func loadView() {
         let container = NSView()
         container.wantsLayer = true
+        container.layer?.backgroundColor = Theme.bg1.cgColor
+
+        contentView.wantsLayer = true
+        contentView.layer?.backgroundColor = Theme.bg1.cgColor
 
         tabBar.translatesAutoresizingMaskIntoConstraints = false
         tabBar.onSelectTab = { [weak self] index in
@@ -290,11 +294,11 @@ class PaneViewController: NSViewController {
             case .terminal:
                 let termCmd = (tab.viewController as! (any TerminalTab)).command
                 title = termCmd.isEmpty ? "Terminal" : termCmd
-                icon = NSImage(systemSymbolName: "terminal", accessibilityDescription: nil)
+                icon = Theme.symbol("terminal", size: 12)
             case .browser:
                 let vc = tab.viewController as! BrowserTabViewController
                 title = vc.currentTitle
-                icon = vc.favicon ?? NSImage(systemSymbolName: "globe", accessibilityDescription: nil)
+                icon = vc.favicon ?? Theme.symbol("globe", size: 12)
             }
             return (title: title, icon: icon, isActive: i == activeTabIndex)
         }

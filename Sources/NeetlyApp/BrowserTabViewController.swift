@@ -31,38 +31,61 @@ class BrowserTabViewController: NSViewController, WKNavigationDelegate, WKUIDele
 
     override func loadView() {
         let container = NSView(frame: NSRect(x: 0, y: 0, width: 800, height: 600))
+        container.wantsLayer = true
+        container.layer?.backgroundColor = Theme.bg1.cgColor
 
-        // URL bar
+        // Borderless, muted nav buttons — matching the design's slim WebKit toolbar.
+        func navButton(_ symbol: String, tip: String, action: Selector) -> NSButton {
+            let b = NSButton()
+            b.image = Theme.symbol(symbol, size: 12.5)
+            b.isBordered = false
+            b.imagePosition = .imageOnly
+            b.contentTintColor = Theme.fg3
+            b.toolTip = tip
+            b.target = self
+            b.action = action
+            b.translatesAutoresizingMaskIntoConstraints = false
+            container.addSubview(b)
+            return b
+        }
+        let backButton = navButton("chevron.left", tip: "Back", action: #selector(goBack))
+        let forwardButton = navButton("chevron.right", tip: "Forward", action: #selector(goForward))
+        let reloadButton = navButton("arrow.clockwise", tip: "Reload", action: #selector(reload))
+
+        // URL bar — sits inside a rounded dark pill with a leading lock glyph.
+        let urlPill = NSView()
+        urlPill.wantsLayer = true
+        urlPill.layer?.backgroundColor = Theme.bg0.cgColor
+        urlPill.layer?.cornerRadius = 5
+        urlPill.translatesAutoresizingMaskIntoConstraints = false
+        container.addSubview(urlPill)
+
+        let lockIcon = NSImageView()
+        lockIcon.image = Theme.symbol("lock.fill", size: 9.5)
+        lockIcon.contentTintColor = Theme.fg4
+        lockIcon.imageScaling = .scaleProportionallyDown
+        lockIcon.translatesAutoresizingMaskIntoConstraints = false
+        urlPill.addSubview(lockIcon)
+
         urlBar = NSTextField()
         urlBar.stringValue = initialURL
-        urlBar.font = .systemFont(ofSize: 13)
-        urlBar.placeholderString = "Enter URL..."
+        urlBar.font = Theme.mono(11.5)
+        urlBar.textColor = Theme.fg2
+        urlBar.placeholderString = "Enter URL\u{2026}"
+        urlBar.isBordered = false
+        urlBar.drawsBackground = false
+        urlBar.focusRingType = .none
         urlBar.target = self
         urlBar.action = #selector(urlBarAction)
         urlBar.translatesAutoresizingMaskIntoConstraints = false
-        container.addSubview(urlBar)
+        urlPill.addSubview(urlBar)
 
-        let backButton = NSButton(image: NSImage(systemSymbolName: "chevron.left", accessibilityDescription: "Back")!,
-                                  target: self, action: #selector(goBack))
-        backButton.bezelStyle = .recessed
-        backButton.toolTip = "Back"
-        backButton.imagePosition = .imageOnly
-        backButton.translatesAutoresizingMaskIntoConstraints = false
-        container.addSubview(backButton)
-
-        let forwardButton = NSButton(image: NSImage(systemSymbolName: "chevron.right", accessibilityDescription: "Forward")!,
-                                     target: self, action: #selector(goForward))
-        forwardButton.bezelStyle = .recessed
-        forwardButton.toolTip = "Forward"
-        forwardButton.imagePosition = .imageOnly
-        forwardButton.translatesAutoresizingMaskIntoConstraints = false
-        container.addSubview(forwardButton)
-
-        let reloadButton = NSButton(title: "R", target: self, action: #selector(reload))
-        reloadButton.bezelStyle = .recessed
-        reloadButton.toolTip = "Reload"
-        reloadButton.translatesAutoresizingMaskIntoConstraints = false
-        container.addSubview(reloadButton)
+        // Hairline under the toolbar.
+        let separator = NSView()
+        separator.wantsLayer = true
+        separator.layer?.backgroundColor = Theme.line1.cgColor
+        separator.translatesAutoresizingMaskIntoConstraints = false
+        container.addSubview(separator)
 
         // Web view — use preinstalled one (from a target=_blank link) or create fresh
         if let pre = preinstalledWebView {
@@ -86,27 +109,41 @@ class BrowserTabViewController: NSViewController, WKNavigationDelegate, WKUIDele
         container.addSubview(webView)
 
         NSLayoutConstraint.activate([
-            backButton.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 4),
-            backButton.topAnchor.constraint(equalTo: container.topAnchor, constant: 4),
-            backButton.widthAnchor.constraint(equalToConstant: 28),
-            backButton.heightAnchor.constraint(equalToConstant: 24),
+            backButton.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 8),
+            backButton.topAnchor.constraint(equalTo: container.topAnchor, constant: 6),
+            backButton.widthAnchor.constraint(equalToConstant: 24),
+            backButton.heightAnchor.constraint(equalToConstant: 22),
 
             forwardButton.leadingAnchor.constraint(equalTo: backButton.trailingAnchor, constant: 2),
-            forwardButton.topAnchor.constraint(equalTo: container.topAnchor, constant: 4),
-            forwardButton.widthAnchor.constraint(equalToConstant: 28),
-            forwardButton.heightAnchor.constraint(equalToConstant: 24),
+            forwardButton.topAnchor.constraint(equalTo: backButton.topAnchor),
+            forwardButton.widthAnchor.constraint(equalToConstant: 24),
+            forwardButton.heightAnchor.constraint(equalToConstant: 22),
 
             reloadButton.leadingAnchor.constraint(equalTo: forwardButton.trailingAnchor, constant: 2),
-            reloadButton.topAnchor.constraint(equalTo: container.topAnchor, constant: 4),
-            reloadButton.widthAnchor.constraint(equalToConstant: 28),
-            reloadButton.heightAnchor.constraint(equalToConstant: 24),
+            reloadButton.topAnchor.constraint(equalTo: backButton.topAnchor),
+            reloadButton.widthAnchor.constraint(equalToConstant: 24),
+            reloadButton.heightAnchor.constraint(equalToConstant: 22),
 
-            urlBar.leadingAnchor.constraint(equalTo: reloadButton.trailingAnchor, constant: 4),
-            urlBar.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -4),
-            urlBar.topAnchor.constraint(equalTo: container.topAnchor, constant: 4),
-            urlBar.heightAnchor.constraint(equalToConstant: 24),
+            urlPill.leadingAnchor.constraint(equalTo: reloadButton.trailingAnchor, constant: 8),
+            urlPill.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -10),
+            urlPill.topAnchor.constraint(equalTo: backButton.topAnchor),
+            urlPill.heightAnchor.constraint(equalToConstant: 22),
 
-            webView.topAnchor.constraint(equalTo: urlBar.bottomAnchor, constant: 4),
+            lockIcon.leadingAnchor.constraint(equalTo: urlPill.leadingAnchor, constant: 9),
+            lockIcon.centerYAnchor.constraint(equalTo: urlPill.centerYAnchor),
+            lockIcon.widthAnchor.constraint(equalToConstant: 10),
+            lockIcon.heightAnchor.constraint(equalToConstant: 10),
+
+            urlBar.leadingAnchor.constraint(equalTo: lockIcon.trailingAnchor, constant: 6),
+            urlBar.trailingAnchor.constraint(equalTo: urlPill.trailingAnchor, constant: -8),
+            urlBar.centerYAnchor.constraint(equalTo: urlPill.centerYAnchor),
+
+            separator.leadingAnchor.constraint(equalTo: container.leadingAnchor),
+            separator.trailingAnchor.constraint(equalTo: container.trailingAnchor),
+            separator.topAnchor.constraint(equalTo: backButton.bottomAnchor, constant: 6),
+            separator.heightAnchor.constraint(equalToConstant: 1),
+
+            webView.topAnchor.constraint(equalTo: separator.bottomAnchor),
             webView.leadingAnchor.constraint(equalTo: container.leadingAnchor),
             webView.trailingAnchor.constraint(equalTo: container.trailingAnchor),
             webView.bottomAnchor.constraint(equalTo: container.bottomAnchor),
