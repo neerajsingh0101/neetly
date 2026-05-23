@@ -218,7 +218,8 @@ final class GhosttyTerminalTabViewController: NSViewController, TerminalTab {
 extension GhosttyTerminalTabViewController:
     TerminalSurfaceTitleDelegate,
     TerminalSurfaceResizeDelegate,
-    TerminalSurfaceCloseDelegate
+    TerminalSurfaceCloseDelegate,
+    TerminalSurfaceOpenURLDelegate
 {
     func terminalDidChangeTitle(_: String) {}
 
@@ -228,5 +229,14 @@ extension GhosttyTerminalTabViewController:
         DispatchQueue.main.async { [weak self] in
             self?.onProcessExited?()
         }
+    }
+
+    /// Cmd-click on a hyperlink (OSC 8 or auto-detected URL) — hand it to
+    /// the system to open in the default browser. Without this conformance,
+    /// libghostty surfaces the action but nothing happens, which is why PR
+    /// links Claude prints stopped working under libghostty.
+    func terminalDidRequestOpenURL(_ url: String, kind _: TerminalOpenURLKind) {
+        guard let nsURL = URL(string: url) else { return }
+        NSWorkspace.shared.open(nsURL)
     }
 }
