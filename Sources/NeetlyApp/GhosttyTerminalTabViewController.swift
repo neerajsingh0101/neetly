@@ -27,6 +27,12 @@ final class GhosttyTerminalTabViewController: NSViewController, TerminalTab {
     /// force each surface to repaint after a config change.
     private static let liveInstances = NSHashTable<GhosttyTerminalTabViewController>.weakObjects()
 
+    /// The config passed to `TerminalController(configuration:)` at init isn't
+    /// honored by libghostty (it's merged over a base config and rejected — the
+    /// same issue `reloadConfiguration` documents), so the first terminal pushes
+    /// the clean rendered config once. See `viewDidLoad`.
+    private static var didApplyInitialConfig = false
+
     /// Builds the ghostty terminal configuration from Neetly's
     /// `~/.config/neetly/terminal.json`, so ghostty matches the app's look.
     static func makeConfiguration() -> TerminalConfiguration {
@@ -135,6 +141,14 @@ final class GhosttyTerminalTabViewController: NSViewController, TerminalTab {
         )
         terminalView.controller = Self.sharedController
         Self.liveInstances.add(self)
+
+        // Apply the themed config once the first surface exists. Without this,
+        // the terminal starts with ghostty's default colors (the init-time
+        // configuration isn't applied) until the user changes the theme.
+        if !Self.didApplyInitialConfig {
+            Self.didApplyInitialConfig = true
+            DispatchQueue.main.async { Self.reloadConfiguration() }
+        }
     }
 
     override func viewDidAppear() {
