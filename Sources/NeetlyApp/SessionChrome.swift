@@ -105,6 +105,13 @@ final class SessionStrip: NSView {
         plusButton.frame = NSRect(x: x + 4, y: (Self.barHeight - 22) / 2, width: 26, height: 22)
     }
 
+    /// Re-apply themed colors after a theme change (tabs are rebuilt by `update`).
+    func applyTheme() {
+        layer?.backgroundColor = Theme.bg0.cgColor
+        plusButton.contentTintColor = Theme.fg3
+        needsDisplay = true
+    }
+
     @objc private func plusClicked() { onNewSession?() }
 
     override func draw(_ dirtyRect: NSRect) {
@@ -320,6 +327,12 @@ final class NeetlyStatusBar: NSView {
             if let url = URL(string: pr.url) { prURLs[btn] = url }
             cluster.addArrangedSubview(btn)
         }
+    }
+
+    /// Re-apply themed colors after a theme change (content rebuilt by `update`).
+    func applyTheme() {
+        layer?.backgroundColor = Theme.bg0.cgColor
+        needsDisplay = true
     }
 
     @objc private func commitClicked() { onOpenCommit?() }

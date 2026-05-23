@@ -153,6 +153,9 @@ struct ThemePickerView: View {
         if TerminalEngine.current == .ghostty {
             GhosttyTerminalTabViewController.reloadConfiguration()
         }
+        // Re-resolve chrome colors and tell the chrome to restyle.
+        ChromeTheme.refresh()
+        NotificationCenter.default.post(name: .neetlyThemeChanged, object: nil)
     }
 }
 

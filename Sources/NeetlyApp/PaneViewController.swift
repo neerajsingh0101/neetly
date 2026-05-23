@@ -175,8 +175,25 @@ class PaneViewController: NSViewController {
     func setFocused(_ isFocused: Bool) {
         guard isViewLoaded, isFocused != isFocusedPane else { return }
         isFocusedPane = isFocused
-        view.layer?.borderColor = Theme.accent.cgColor
-        view.layer?.borderWidth = isFocused ? 1.5 : 0
+        // Subtle: a thin, half-opacity accent so the active pane reads quietly.
+        view.layer?.borderColor = Theme.accent.withAlphaComponent(0.5).cgColor
+        view.layer?.borderWidth = isFocused ? 1 : 0
+    }
+
+    /// Re-apply themed colors after a theme change: pane backgrounds, the tab
+    /// bar, the rebuilt tab buttons, and any browser tabs' toolbars.
+    func applyTheme() {
+        guard isViewLoaded else { return }
+        view.layer?.backgroundColor = Theme.bg1.cgColor
+        contentView.layer?.backgroundColor = Theme.bg1.cgColor
+        if isFocusedPane {
+            view.layer?.borderColor = Theme.accent.withAlphaComponent(0.5).cgColor
+        }
+        tabBar.applyTheme()
+        refreshTabBar()
+        for tab in tabs {
+            (tab.viewController as? BrowserTabViewController)?.applyTheme()
+        }
     }
 
     func closeTab(at index: Int) {

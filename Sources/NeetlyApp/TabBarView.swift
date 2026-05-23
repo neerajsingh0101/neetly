@@ -96,6 +96,16 @@ class TabBarView: NSView {
         }
     }
 
+    /// Re-apply themed colors after a theme change. Tab buttons are rebuilt by
+    /// the owning pane's `refreshTabBar()`; this handles the bar's own chrome.
+    func applyTheme() {
+        layer?.backgroundColor = Theme.bg0.cgColor
+        for btn in [newTerminalButton, newBrowserButton, splitColButton, splitRowButton, maximizeButton] {
+            btn.contentTintColor = Theme.fg3
+        }
+        needsDisplay = true
+    }
+
     @objc private func newTerminalClicked() {
         onNewTerminal?()
     }

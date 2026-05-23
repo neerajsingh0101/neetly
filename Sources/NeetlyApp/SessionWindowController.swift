@@ -200,10 +200,35 @@ class SessionWindowController: NSWindowController {
         window.titleVisibility = .hidden
         super.init(window: window)
         setupLayout()
+        applyWindowTheme()
+        NotificationCenter.default.addObserver(
+            self, selector: #selector(themeChanged),
+            name: .neetlyThemeChanged, object: nil
+        )
     }
 
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError() }
+
+    deinit { NotificationCenter.default.removeObserver(self) }
+
+    /// Match the window appearance/background to the picked terminal theme
+    /// (or the dark design palette for Neetly Default).
+    private func applyWindowTheme() {
+        guard let window else { return }
+        let dark = ChromeTheme.current?.isDark ?? true  // design palette is dark
+        window.appearance = NSAppearance(named: dark ? .darkAqua : .aqua)
+        window.backgroundColor = Theme.bg0
+        contentArea.layer?.backgroundColor = Theme.bg0.cgColor
+    }
+
+    @objc private func themeChanged() {
+        applyWindowTheme()
+        sessionStrip.applyTheme()
+        statusBar.applyTheme()
+        refreshTabBar()
+        getSplitTree()?.applyTheme()
+    }
 
     private func setupLayout() {
         guard let contentView = window?.contentView else { return }

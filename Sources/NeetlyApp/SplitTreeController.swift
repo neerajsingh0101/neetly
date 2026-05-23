@@ -371,6 +371,20 @@ class SplitTreeController: NSViewController {
         collapsePane(pane)
     }
 
+    // MARK: - Theme
+
+    /// Re-theme every pane and redraw the split seams after a theme change.
+    func applyTheme() {
+        func redrawSplits(_ v: NSView) {
+            if v is NSSplitView { v.needsDisplay = true }
+            v.subviews.forEach(redrawSplits)
+        }
+        redrawSplits(view)
+        for pane in paneControllers.values {
+            pane.applyTheme()
+        }
+    }
+
     // MARK: - Focused-pane indicator
 
     /// The pane currently owning keyboard focus, by walking up from the

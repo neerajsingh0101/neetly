@@ -7,6 +7,11 @@ class BrowserTabViewController: NSViewController, WKNavigationDelegate, WKUIDele
     let initialURL: String
     private(set) var webView: WKWebView!
     private var urlBar: NSTextField!
+    // Toolbar pieces kept so they can be re-themed on a theme change.
+    private var navButtons: [NSButton] = []
+    private var urlPillView: NSView?
+    private var lockIconView: NSImageView?
+    private var toolbarSeparator: NSView?
     private(set) var currentTitle: String = "Browser"
     private(set) var favicon: NSImage?
     private(set) var hasCompletedInitialLoad = false
@@ -37,6 +42,18 @@ class BrowserTabViewController: NSViewController, WKNavigationDelegate, WKUIDele
         view.window?.makeFirstResponder(webView)
     }
 
+    /// Re-apply themed colors to the browser toolbar after a theme change.
+    /// (Web page content is the site's own and isn't themed.)
+    func applyTheme() {
+        guard isViewLoaded else { return }
+        view.layer?.backgroundColor = Theme.bg1.cgColor
+        navButtons.forEach { $0.contentTintColor = Theme.fg3 }
+        urlPillView?.layer?.backgroundColor = Theme.bg0.cgColor
+        lockIconView?.contentTintColor = Theme.fg4
+        urlBar?.textColor = Theme.fg2
+        toolbarSeparator?.layer?.backgroundColor = Theme.line1.cgColor
+    }
+
     override func loadView() {
         let container = NSView(frame: NSRect(x: 0, y: 0, width: 800, height: 600))
         container.wantsLayer = true
@@ -54,6 +71,7 @@ class BrowserTabViewController: NSViewController, WKNavigationDelegate, WKUIDele
             b.action = action
             b.translatesAutoresizingMaskIntoConstraints = false
             container.addSubview(b)
+            self.navButtons.append(b)
             return b
         }
         let backButton = navButton("chevron.left", tip: "Back", action: #selector(goBack))
@@ -67,6 +85,7 @@ class BrowserTabViewController: NSViewController, WKNavigationDelegate, WKUIDele
         urlPill.layer?.cornerRadius = 5
         urlPill.translatesAutoresizingMaskIntoConstraints = false
         container.addSubview(urlPill)
+        urlPillView = urlPill
 
         let lockIcon = NSImageView()
         lockIcon.image = Theme.symbol("lock.fill", size: 9.5)
@@ -74,6 +93,7 @@ class BrowserTabViewController: NSViewController, WKNavigationDelegate, WKUIDele
         lockIcon.imageScaling = .scaleProportionallyDown
         lockIcon.translatesAutoresizingMaskIntoConstraints = false
         urlPill.addSubview(lockIcon)
+        lockIconView = lockIcon
 
         urlBar = NSTextField()
         urlBar.stringValue = initialURL
@@ -94,6 +114,7 @@ class BrowserTabViewController: NSViewController, WKNavigationDelegate, WKUIDele
         separator.layer?.backgroundColor = Theme.line1.cgColor
         separator.translatesAutoresizingMaskIntoConstraints = false
         container.addSubview(separator)
+        toolbarSeparator = separator
 
         // Web view — use preinstalled one (from a target=_blank link) or create fresh
         if let pre = preinstalledWebView {

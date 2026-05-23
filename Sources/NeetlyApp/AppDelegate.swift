@@ -12,6 +12,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // Shorten AppKit's default ~1.5s tooltip delay.
         UserDefaults.standard.register(defaults: ["NSInitialToolTipDelay": 300])
 
+        // Resolve chrome colors from the saved terminal theme before any window
+        // or menu reads a Theme color.
+        ChromeTheme.refresh()
+
         setAppIcon()
         setupMainMenu()
         setupEscapeKeyMonitor()

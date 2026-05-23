@@ -1332,6 +1332,9 @@ struct SettingsScreen: View {
                 if TerminalEngine.current == .ghostty {
                     GhosttyTerminalTabViewController.reloadConfiguration()
                 }
+                // Custom colors drive the chrome too — restyle live.
+                ChromeTheme.refresh()
+                NotificationCenter.default.post(name: .neetlyThemeChanged, object: nil)
             }
         )
     }
