@@ -237,7 +237,6 @@ struct RepoListScreen: View {
                 .padding(.horizontal, 24)
                 .padding(.vertical, 8)
             }
-            footer
         }
         .frame(minWidth: 720, minHeight: 600)
         .background(Theme.bg0C)
@@ -316,35 +315,10 @@ struct RepoListScreen: View {
         .font(.system(size: 13, design: .monospaced))
     }
 
-    // MARK: Footer
-
-    private var footer: some View {
-        VStack(spacing: 0) {
-            Rectangle().fill(Theme.line1C).frame(height: 1)
-            HStack(spacing: 20) {
-                footerHint("⌘P", "switch")
-                footerHint("⌘T", "new session")
-                footerHint("⌘K", "palette")
-                footerHint("⌘,", "settings")
-                Spacer()
-            }
-            .padding(.horizontal, 24)
-            .padding(.vertical, 12)
-        }
-    }
-
-    private func footerHint(_ key: String, _ label: String) -> some View {
-        HStack(spacing: 5) {
-            Text(key).foregroundColor(Theme.fg3C)
-            Text(label).foregroundColor(Theme.fg4C)
-        }
-        .font(.system(size: 12, design: .monospaced))
-    }
-
     // MARK: State
 
     private var targetHeight: CGFloat {
-        var h: CGFloat = 130 + 50  // header + footer
+        var h: CGFloat = 130  // header
         for repo in sortedRepos {
             h += 52
             if expanded.contains(repo.id) {
