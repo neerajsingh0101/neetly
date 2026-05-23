@@ -159,12 +159,24 @@ class PaneViewController: NSViewController {
         // Trigger viewDidAppear for the tab
         vc.viewDidAppear()
 
-        // Focus the content
+        // Focus the content so the firstResponder lands in this pane.
         if let termVC = vc as? (any TerminalTab) {
             termVC.focusTerminal()
+        } else if let browserVC = vc as? BrowserTabViewController {
+            browserVC.focusContent()
         }
 
         refreshTabBar()
+    }
+
+    private var isFocusedPane = false
+    /// Show/hide the focused-pane accent border (driven by SplitTreeController).
+    /// Idempotent, so it's cheap to call on every window update.
+    func setFocused(_ isFocused: Bool) {
+        guard isViewLoaded, isFocused != isFocusedPane else { return }
+        isFocusedPane = isFocused
+        view.layer?.borderColor = Theme.accent.cgColor
+        view.layer?.borderWidth = isFocused ? 1.5 : 0
     }
 
     func closeTab(at index: Int) {

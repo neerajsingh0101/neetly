@@ -319,7 +319,7 @@ class SessionWindowController: NSWindowController {
         }
     }
 
-    private func selectSession(at index: Int) {
+    func selectSession(at index: Int) {
         guard index >= 0 && index < sessions.count else { return }
 
         // Detach every session's splitTree view from contentArea before adding
@@ -349,7 +349,7 @@ class SessionWindowController: NSWindowController {
         }
     }
 
-    private func closeSession(at index: Int) {
+    func closeSession(at index: Int) {
         guard index >= 0 && index < sessions.count else { return }
 
         // Mark as detached (keep in store so it stays in the session list,
@@ -415,6 +415,10 @@ class SessionWindowController: NSWindowController {
         guard activeIndex >= 0 && activeIndex < sessions.count else { return nil }
         return sessions[activeIndex].splitTree
     }
+
+    /// Open session count and active index, for keyboard session navigation.
+    func sessionCount() -> Int { sessions.count }
+    func activeSessionIndex() -> Int { activeIndex }
 
     /// Launch-screen helper: the live Claude state of the session whose worktree
     /// is `repoPath`. Returns `.idle` when that session isn't currently open, so

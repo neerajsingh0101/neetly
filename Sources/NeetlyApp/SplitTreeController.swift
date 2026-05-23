@@ -22,6 +22,9 @@ class RatioSplitView: NSSplitView {
     }
 }
 
+/// Direction for moving keyboard focus between adjacent panes (vim hjkl).
+enum PaneFocusDirection { case left, right, up, down }
+
 /// Recursively builds NSSplitView hierarchy from a LayoutNode tree.
 class SplitTreeController: NSViewController {
     let layout: LayoutNode
@@ -62,6 +65,16 @@ class SplitTreeController: NSViewController {
         treeRoot.autoresizingMask = [.width, .height]
         container.addSubview(treeRoot)
         view = container
+    }
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        // Keep the focused-pane indicator in sync: first-responder changes
+        // (keyboard nav, mouse clicks, tab switches) all post this notification.
+        NotificationCenter.default.addObserver(
+            self, selector: #selector(windowDidUpdate(_:)),
+            name: NSWindow.didUpdateNotification, object: nil
+        )
     }
 
     private func buildView(from node: LayoutNode) -> NSView {
@@ -313,5 +326,82 @@ class SplitTreeController: NSViewController {
 
         // Restore focus so Cmd+Shift+M continues to work
         paneView.window?.makeFirstResponder(paneView)
+    }
+
+    // MARK: - Pane navigation
+
+    /// The pane spatially adjacent to `pane` in `direction`, found by frame
+    /// geometry in window coordinates — works across arbitrary split nesting,
+    /// and avoids tree walking. Returns nil while a pane is maximized.
+    /// (AppKit's y-axis points up, so "up" = larger y.)
+    func adjacentPane(to pane: PaneViewController, _ direction: PaneFocusDirection) -> PaneViewController? {
+        guard maximizedState == nil else { return nil }
+        let src = pane.view.convert(pane.view.bounds, to: nil)
+        let srcMid = CGPoint(x: src.midX, y: src.midY)
+        let eps: CGFloat = 1
+        var best: PaneViewController?
+        var bestDist = CGFloat.greatestFiniteMagnitude
+        for other in paneControllers.values where other !== pane {
+            let f = other.view.convert(other.view.bounds, to: nil)
+            let aligned: Bool
+            switch direction {
+            case .right: aligned = f.minX >= src.maxX - eps && src.minY < f.maxY && f.minY < src.maxY
+            case .left:  aligned = f.maxX <= src.minX + eps && src.minY < f.maxY && f.minY < src.maxY
+            case .up:    aligned = f.minY >= src.maxY - eps && src.minX < f.maxX && f.minX < src.maxX
+            case .down:  aligned = f.maxY <= src.minY + eps && src.minX < f.maxX && f.minX < src.maxX
+            }
+            guard aligned else { continue }
+            let dist = hypot(f.midX - srcMid.x, f.midY - srcMid.y)
+            if dist < bestDist { bestDist = dist; best = other }
+        }
+        return best
+    }
+
+    /// Move keyboard focus to the adjacent pane in `direction`, if any.
+    func focusAdjacentPane(from pane: PaneViewController, _ direction: PaneFocusDirection) {
+        guard let target = adjacentPane(to: pane, direction) else { return }
+        target.view.window?.makeFirstResponder(target.view)
+    }
+
+    /// Explicitly close a pane (even with open tabs) and collapse its split.
+    /// No-op for the sole/root pane.
+    func closePane(_ pane: PaneViewController) {
+        guard pane.view.superview is NSSplitView else { return }
+        pane.terminateAllTerminals()
+        collapsePane(pane)
+    }
+
+    // MARK: - Focused-pane indicator
+
+    /// The pane currently owning keyboard focus, by walking up from the
+    /// window's first responder. Nil if focus isn't in any of this tree's panes.
+    func focusedPane() -> PaneViewController? {
+        guard let responder = view.window?.firstResponder as? NSView else { return nil }
+        var current: NSView? = responder
+        while let v = current {
+            if let pane = paneControllers.values.first(where: {
+                $0.view == v || $0.view.isDescendant(of: v) || v.isDescendant(of: $0.view)
+            }) {
+                return pane
+            }
+            current = v.superview
+        }
+        return nil
+    }
+
+    /// Repaint the focus border on the focused pane (and clear the rest).
+    /// No cue when there's only one pane. `setFocused` is idempotent, so
+    /// calling this on every window update is cheap.
+    @objc private func windowDidUpdate(_ note: Notification) {
+        guard view.window != nil else { return }  // only the visible (active) tree
+        let focused = focusedPane()
+        let highlight = paneControllers.count > 1
+        for pane in paneControllers.values {
+            pane.setFocused(highlight && pane === focused)
+        }
+    }
+
+    deinit {
+        NotificationCenter.default.removeObserver(self)
     }
 }

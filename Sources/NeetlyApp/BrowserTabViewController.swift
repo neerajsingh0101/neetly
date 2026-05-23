@@ -29,6 +29,14 @@ class BrowserTabViewController: NSViewController, WKNavigationDelegate, WKUIDele
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError() }
 
+    /// Make the web view first responder so keyboard focus lands in this pane
+    /// when its tab is selected — mirrors the terminal's `focusTerminal()`.
+    /// Without this, switching to a browser tab leaves the firstResponder on
+    /// the window, so pane-targeted shortcuts can't tell which pane is active.
+    func focusContent() {
+        view.window?.makeFirstResponder(webView)
+    }
+
     override func loadView() {
         let container = NSView(frame: NSRect(x: 0, y: 0, width: 800, height: 600))
         container.wantsLayer = true
