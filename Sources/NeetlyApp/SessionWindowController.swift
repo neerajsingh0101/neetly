@@ -191,7 +191,7 @@ class SessionTabBar: NSView {
 
         plusButton.title = "+"
         plusButton.toolTip = "New Session"
-        plusButton.bezelStyle = .recessed
+        plusButton.isBordered = false
         plusButton.font = .systemFont(ofSize: 14, weight: .medium)
         plusButton.target = self
         plusButton.action = #selector(plusClicked)
@@ -203,7 +203,7 @@ class SessionTabBar: NSView {
         // sits apart from the per-session tabs rather than scrolling with them.
         themeButton.image = NSImage(systemSymbolName: "paintpalette", accessibilityDescription: "Themes")
         themeButton.toolTip = "Terminal Theme"
-        themeButton.bezelStyle = .recessed
+        themeButton.isBordered = false
         themeButton.imagePosition = .imageOnly
         themeButton.target = self
         themeButton.action = #selector(themeClicked)
@@ -244,13 +244,19 @@ class SessionTabBar: NSView {
             x += tab.frame.width + 4
         }
 
+        let plusColor = ChromeTheme.current?.foreground ?? .labelColor
+        let plusFont = NSFont.systemFont(ofSize: 14, weight: .medium)
         if sessions.isEmpty {
-            plusButton.title = "+ Add new session"
-            plusButton.font = .systemFont(ofSize: 14, weight: .medium)
+            plusButton.attributedTitle = NSAttributedString(
+                string: "+ Add new session",
+                attributes: [.font: plusFont, .foregroundColor: plusColor]
+            )
             plusButton.sizeToFit()
         } else {
-            plusButton.title = "+"
-            plusButton.font = .systemFont(ofSize: 14, weight: .medium)
+            plusButton.attributedTitle = NSAttributedString(
+                string: "+",
+                attributes: [.font: plusFont, .foregroundColor: plusColor]
+            )
             plusButton.frame.size = NSSize(width: 28, height: 24)
         }
         plusButton.frame.origin.x = x
@@ -311,7 +317,11 @@ class SessionTabBar: NSView {
 
         prURLsByButton.removeAll()
         for pr in active.prInfos {
-            let prColor = SessionTab.color(for: pr.state)
+            // Merged PRs are informational, not urgent — match the SHA color
+            // so they blend in across themes instead of always reading purple.
+            let prColor: NSColor = pr.state == .merged
+                ? detailMuted
+                : SessionTab.color(for: pr.state)
             let stateText = SessionTab.stateLabel(for: pr.state)
 
             let prAttr = NSMutableAttributedString()
@@ -400,7 +410,9 @@ class SessionTabBar: NSView {
     /// Paints the bar background from the picked theme, or the system color
     /// when none is set. Also re-runs `draw()` for the detail-row strip.
     func applyChromeTheme() {
-        layer?.backgroundColor = (ChromeTheme.current?.background ?? .windowBackgroundColor).cgColor
+        let theme = ChromeTheme.current
+        layer?.backgroundColor = (theme?.background ?? .windowBackgroundColor).cgColor
+        themeButton.contentTintColor = theme?.foreground ?? .labelColor
         needsDisplay = true
     }
 

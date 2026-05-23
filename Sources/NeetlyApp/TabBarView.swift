@@ -23,7 +23,7 @@ class TabBarView: NSView {
         // "+Terminal" button — right-aligned
         newTerminalButton.title = ">_"
         newTerminalButton.toolTip = "New Terminal"
-        newTerminalButton.bezelStyle = .recessed
+        newTerminalButton.isBordered = false
         newTerminalButton.font = .systemFont(ofSize: 11, weight: .medium)
         newTerminalButton.target = self
         newTerminalButton.action = #selector(newTerminalClicked)
@@ -33,7 +33,7 @@ class TabBarView: NSView {
         // "+Browser" button — right of terminal button
         newBrowserButton.image = NSImage(systemSymbolName: "globe", accessibilityDescription: "New Browser")
         newBrowserButton.toolTip = "New Browser"
-        newBrowserButton.bezelStyle = .recessed
+        newBrowserButton.isBordered = false
         newBrowserButton.imagePosition = .imageOnly
         newBrowserButton.target = self
         newBrowserButton.action = #selector(newBrowserClicked)
@@ -43,7 +43,7 @@ class TabBarView: NSView {
         // Split columns button
         splitColButton.image = NSImage(systemSymbolName: "rectangle.split.2x1", accessibilityDescription: "Split into Columns")
         splitColButton.toolTip = "Split into Columns"
-        splitColButton.bezelStyle = .recessed
+        splitColButton.isBordered = false
         splitColButton.imagePosition = .imageOnly
         splitColButton.target = self
         splitColButton.action = #selector(splitColClicked)
@@ -53,7 +53,7 @@ class TabBarView: NSView {
         // Split rows button
         splitRowButton.image = NSImage(systemSymbolName: "rectangle.split.1x2", accessibilityDescription: "Split into Rows")
         splitRowButton.toolTip = "Split into Rows"
-        splitRowButton.bezelStyle = .recessed
+        splitRowButton.isBordered = false
         splitRowButton.imagePosition = .imageOnly
         splitRowButton.target = self
         splitRowButton.action = #selector(splitRowClicked)
@@ -63,7 +63,7 @@ class TabBarView: NSView {
         // Maximize button
         maximizeButton.image = NSImage(systemSymbolName: "arrow.up.left.and.arrow.down.right", accessibilityDescription: "Maximize")
         maximizeButton.toolTip = "Maximize (Cmd+Shift+M)"
-        maximizeButton.bezelStyle = .recessed
+        maximizeButton.isBordered = false
         maximizeButton.imagePosition = .imageOnly
         maximizeButton.target = self
         maximizeButton.action = #selector(maximizeClicked)
@@ -108,10 +108,20 @@ class TabBarView: NSView {
     func applyChromeTheme() {
         let theme = ChromeTheme.current
         layer?.backgroundColor = (theme?.background ?? .controlBackgroundColor).cgColor
-        let accent = theme?.accent ?? .controlAccentColor
-        for btn in [newTerminalButton, newBrowserButton, splitColButton, splitRowButton, maximizeButton] {
-            btn.contentTintColor = accent
+        // Icons take the theme's foreground (Apple Classic's amber, for
+        // example) — palette[4] (the accent) is reserved for the active-tab
+        // highlight, matching Muxy.
+        let iconColor = theme?.foreground ?? .labelColor
+        for btn in [newBrowserButton, splitColButton, splitRowButton, maximizeButton] {
+            btn.contentTintColor = iconColor
         }
+        newTerminalButton.attributedTitle = NSAttributedString(
+            string: ">_",
+            attributes: [
+                .font: NSFont.systemFont(ofSize: 11, weight: .medium),
+                .foregroundColor: iconColor,
+            ]
+        )
         needsDisplay = true
     }
 

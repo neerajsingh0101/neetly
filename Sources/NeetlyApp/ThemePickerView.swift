@@ -2,11 +2,17 @@ import AppKit
 import GhosttyTheme
 import SwiftUI
 
-/// A searchable popover list of terminal themes. Selecting one applies it to
-/// every open terminal instantly and persists it — there is no save button.
+/// A searchable popover list of terminal themes. Selecting one applies it
+/// to every open terminal instantly and persists it — no save button.
+///
+/// Keyboard: the search field captures focus on open, and ↑/↓ arrow keys
+/// move the selection while auto-applying the highlighted theme — VS-Code
+/// style live preview. Stop = that's your theme.
 struct ThemePickerView: View {
     @State private var searchText = ""
     @State private var currentTheme: String? = TerminalConfig.load().theme
+    @State private var highlightedID: String?
+    @FocusState private var searchFocused: Bool
 
     private var results: [GhosttyThemeDefinition] {
         // GhosttyThemeCatalog.search("") returns nothing — its name filter
@@ -24,24 +30,67 @@ struct ThemePickerView: View {
                     .foregroundColor(.secondary)
                 TextField("Search themes", text: $searchText)
                     .textFieldStyle(.plain)
+                    .focused($searchFocused)
+                    .onKeyPress(.upArrow) {
+                        moveSelection(by: -1)
+                        return .handled
+                    }
+                    .onKeyPress(.downArrow) {
+                        moveSelection(by: 1)
+                        return .handled
+                    }
             }
             .padding(10)
 
             Divider()
 
-            List(results) { theme in
-                Button {
-                    apply(theme)
-                } label: {
-                    ThemeRow(theme: theme, isSelected: theme.name == currentTheme)
+            ScrollViewReader { proxy in
+                List(selection: $highlightedID) {
+                    ForEach(results) { theme in
+                        ThemeRow(theme: theme, isSelected: theme.name == currentTheme)
+                            .tag(theme.id)
+                            .contentShape(Rectangle())
+                            .onTapGesture { highlightedID = theme.id }
+                            .listRowInsets(EdgeInsets())
+                            .listRowSeparator(.hidden)
+                    }
                 }
-                .buttonStyle(.plain)
-                .listRowInsets(EdgeInsets())
-                .listRowSeparator(.hidden)
+                .listStyle(.plain)
+                .onChange(of: highlightedID) { _, newID in
+                    guard let id = newID,
+                          let theme = results.first(where: { $0.id == id })
+                    else { return }
+                    apply(theme)
+                    withAnimation(.linear(duration: 0.1)) {
+                        proxy.scrollTo(id, anchor: .center)
+                    }
+                }
             }
-            .listStyle(.plain)
         }
         .frame(width: 320, height: 460)
+        .onAppear {
+            highlightedID = currentTheme
+            // Defer focus a tick so the popover's window has become key.
+            DispatchQueue.main.async { searchFocused = true }
+        }
+        .onChange(of: searchText) { _, _ in
+            // After a filter change, keep the current highlight visible —
+            // else jump to the first result so ↑/↓ has somewhere to start.
+            if let id = highlightedID, results.contains(where: { $0.id == id }) { return }
+            highlightedID = results.first?.id
+        }
+    }
+
+    private func moveSelection(by delta: Int) {
+        guard !results.isEmpty else { return }
+        let currentIdx = highlightedID.flatMap { id in
+            results.firstIndex(where: { $0.id == id })
+        } ?? -1
+        let nextIdx = currentIdx < 0
+            ? 0
+            : max(0, min(results.count - 1, currentIdx + delta))
+        highlightedID = results[nextIdx].id
+        // .onChange(of: highlightedID) does the apply + scroll.
     }
 
     private func apply(_ theme: GhosttyThemeDefinition) {
