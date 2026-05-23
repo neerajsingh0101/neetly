@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 // MARK: - Screen Navigation
@@ -1078,6 +1079,8 @@ struct SettingsScreen: View {
     @State private var diffCommand: String = NeetlySettings.shared.diffCommand
     @State private var postCreateCommand: String = NeetlySettings.shared.postWorktreeCreateCommand
     @State private var fontSize: Int = Int(TerminalConfig.load().fontSize ?? 17)
+    @State private var themeName: String = TerminalConfig.load().theme ?? TerminalConfig.neetlyThemeName
+    @State private var showingThemePicker = false
     @State private var worktreeError: String?
     @FocusState private var focusedField: Field?
     var onBack: () -> Void
@@ -1201,6 +1204,37 @@ struct SettingsScreen: View {
                         .frame(width: 130, alignment: .leading)
                     }
 
+                    Divider()
+
+                    // Terminal theme — built-in Neetly Default, any GhosttyTheme, or Custom.
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Terminal Theme")
+                            .font(.system(size: 16, weight: .medium))
+                        Text("Colors for terminal tabs. Neetly Default matches the app chrome; or pick any GhosttyTheme, or choose Custom to set your own. Changes apply to open terminals immediately.")
+                            .font(.system(size: 13))
+                            .foregroundColor(.secondary)
+                        HStack(spacing: 10) {
+                            Text(themeName)
+                                .font(.system(size: 15, design: .monospaced))
+                                .foregroundColor(.secondary)
+                            Button("Choose…") { showingThemePicker = true }
+                                .popover(isPresented: $showingThemePicker, arrowEdge: .bottom) {
+                                    ThemePickerView()
+                                }
+                        }
+                        if themeName == TerminalConfig.customThemeName {
+                            VStack(alignment: .leading, spacing: 10) {
+                                ColorPicker("Background", selection: customColor(\.backgroundColor, default: NeetlyTerminalTheme.background), supportsOpacity: false)
+                                ColorPicker("Foreground", selection: customColor(\.foregroundColor, default: NeetlyTerminalTheme.foreground), supportsOpacity: false)
+                                ColorPicker("Accent / Links", selection: customColor(\.linkColor, default: NeetlyTerminalTheme.cursor), supportsOpacity: false)
+                                ColorPicker("Selection", selection: customColor(\.selectionColor, default: NeetlyTerminalTheme.selection), supportsOpacity: false)
+                            }
+                            .font(.system(size: 14))
+                            .frame(width: 260, alignment: .leading)
+                            .padding(.top, 4)
+                        }
+                    }
+
                 }
                 .padding(.horizontal, 20)
                 .padding(.bottom, 20)
@@ -1208,6 +1242,13 @@ struct SettingsScreen: View {
         }
         .frame(minWidth: 700, minHeight: 600)
         .onChange(of: fontSize) { _, _ in commitFontSize() }
+        .onChange(of: showingThemePicker) { _, isShowing in
+            // Reflect the picked theme (and whether to show the custom wells)
+            // when the popover closes.
+            if !isShowing {
+                themeName = TerminalConfig.load().theme ?? TerminalConfig.neetlyThemeName
+            }
+        }
         .onChange(of: focusedField) { previous, _ in
             // Commit a field's value as soon as focus leaves it.
             switch previous {
@@ -1271,6 +1312,28 @@ struct SettingsScreen: View {
         if TerminalEngine.current == .ghostty {
             GhosttyTerminalTabViewController.reloadConfiguration()
         }
+    }
+
+    /// A binding that reads/writes one of the custom palette's hex color fields
+    /// as a SwiftUI `Color`, persisting and live-applying on each change. Only
+    /// used while the "Custom" theme is active, so it edits the explicit colors
+    /// that `makeConfiguration` falls back to.
+    private func customColor(_ keyPath: WritableKeyPath<TerminalConfig, String?>,
+                             default fallback: String) -> Binding<Color> {
+        Binding(
+            get: {
+                let hex = TerminalConfig.load()[keyPath: keyPath] ?? fallback
+                return NSColor.fromHex(hex).map { Color(nsColor: $0) } ?? .black
+            },
+            set: { newValue in
+                var cfg = TerminalConfig.load()
+                cfg[keyPath: keyPath] = NSColor(newValue).hexString
+                cfg.save()
+                if TerminalEngine.current == .ghostty {
+                    GhosttyTerminalTabViewController.reloadConfiguration()
+                }
+            }
+        )
     }
 }
 

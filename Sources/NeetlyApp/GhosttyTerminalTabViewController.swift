@@ -1,5 +1,6 @@
 import AppKit
 import GhosttyTerminal
+import GhosttyTheme
 
 /// libghostty-backed terminal tab — a drop-in alternative to the SwiftTerm
 /// `TerminalTabViewController`, selected by `TerminalEngine.current`.
@@ -22,6 +23,10 @@ final class GhosttyTerminalTabViewController: NSViewController, TerminalTab {
     /// One ghostty runtime (`ghostty_app`) shared by every terminal tab.
     static let sharedController = TerminalController(configuration: makeConfiguration())
 
+    /// Every live terminal tab, weakly held — so `reloadConfiguration()` can
+    /// force each surface to repaint after a config change.
+    private static let liveInstances = NSHashTable<GhosttyTerminalTabViewController>.weakObjects()
+
     /// Builds the ghostty terminal configuration from Neetly's
     /// `~/.config/neetly/terminal.json`, so ghostty matches the app's look.
     static func makeConfiguration() -> TerminalConfiguration {
@@ -29,30 +34,80 @@ final class GhosttyTerminalTabViewController: NSViewController, TerminalTab {
         return TerminalConfiguration { builder in
             builder.withFontFamily(cfg.fontFamily ?? "JetBrains Mono")
             builder.withFontSize(Float(cfg.fontSize ?? 17))
-            if let bg = cfg.backgroundColor { builder.withBackground(bg) }
-            if let fg = cfg.foregroundColor { builder.withForeground(fg) }
-            if let sel = cfg.selectionColor { builder.withSelectionBackground(sel) }
-            // Neetly tints links by overriding ANSI palette blue (4) and
-            // bright blue (12) — the same indices its OSC-4 trick used.
-            if let link = cfg.linkColor {
-                builder.withPalette(4, color: link)
-                builder.withPalette(12, color: link)
+            if cfg.theme == TerminalConfig.neetlyThemeName {
+                // The built-in Neetly theme — the app's design tokens as a
+                // ghostty palette, so terminal content matches the chrome.
+                builder.withBackground(NeetlyTerminalTheme.background)
+                builder.withForeground(NeetlyTerminalTheme.foreground)
+                builder.withCursorColor(NeetlyTerminalTheme.cursor)
+                builder.withSelectionBackground(NeetlyTerminalTheme.selection)
+                for index in NeetlyTerminalTheme.palette.keys.sorted() {
+                    if let color = NeetlyTerminalTheme.palette[index] {
+                        builder.withPalette(index, color: color)
+                    }
+                }
+            } else if let themeName = cfg.theme,
+               let theme = GhosttyThemeCatalog.theme(named: themeName) {
+                // A picked theme owns every color. Theme hex values are bare
+                // ("1e1e2e"); ghostty config wants a leading "#".
+                func hex(_ value: String) -> String {
+                    value.hasPrefix("#") ? value : "#" + value
+                }
+                builder.withBackground(hex(theme.background))
+                builder.withForeground(hex(theme.foreground))
+                if let cursor = theme.cursorColor { builder.withCursorColor(hex(cursor)) }
+                if let cursorText = theme.cursorText { builder.withCursorText(hex(cursorText)) }
+                if let selBg = theme.selectionBackground { builder.withSelectionBackground(hex(selBg)) }
+                if let selFg = theme.selectionForeground { builder.withSelectionForeground(hex(selFg)) }
+                for index in theme.palette.keys.sorted() {
+                    if let color = theme.palette[index] {
+                        builder.withPalette(index, color: hex(color))
+                    }
+                }
+            } else {
+                // No theme picked — the explicit terminal.json colors.
+                if let bg = cfg.backgroundColor { builder.withBackground(bg) }
+                if let fg = cfg.foregroundColor { builder.withForeground(fg) }
+                if let sel = cfg.selectionColor { builder.withSelectionBackground(sel) }
+                // Tint links by overriding ANSI palette blue (4) and bright
+                // blue (12) — the indices Neetly's OSC-4 trick used.
+                if let link = cfg.linkColor {
+                    builder.withPalette(4, color: link)
+                    builder.withPalette(12, color: link)
+                }
             }
             // Advertise the universally-installed `xterm-256color` terminfo
             // entry rather than ghostty's own `xterm-ghostty`, so
             // vim/htop/lazygit work on every machine.
             builder.withCustom("term", "xterm-256color")
-            // Let Neetly's menu own Cmd+, (Settings): ghostty binds it to
-            // open_config by default and would otherwise swallow the shortcut.
+            // Let Neetly's menu own these shortcuts — ghostty's defaults
+            // would otherwise swallow them before AppKit could route to the
+            // menu: super+, (open_config) and super+q (quit, which has no
+            // host integration in libghostty so the app would never quit).
             builder.withCustom("keybind", "super+,=unbind")
+            builder.withCustom("keybind", "super+q=unbind")
         }
     }
 
     /// Re-reads `terminal.json` and live-applies it to every open ghostty
     /// terminal (and tabs created afterward). Call after the user changes
-    /// terminal appearance in Settings.
+    /// terminal appearance in Settings or picks a theme.
+    ///
+    /// Uses `updateConfigSource` rather than `setTerminalConfiguration`: the
+    /// latter merges the config over a base config, yielding duplicate keys
+    /// that ghostty's parser can reject. This pushes one clean config and
+    /// updates every open surface directly.
     static func reloadConfiguration() {
-        sharedController.setTerminalConfiguration(makeConfiguration())
+        sharedController.updateConfigSource(.generated(makeConfiguration().rendered))
+        if let issue = sharedController.lastConfigurationIssue {
+            NSLog("[neetly] terminal config rejected: \(issue)")
+        }
+        // updateConfigSource updates each surface's config but does not
+        // trigger a redraw — an idle terminal keeps its old colors until it
+        // next renders. Nudge every open terminal to repaint now.
+        for instance in liveInstances.allObjects {
+            instance.terminalView?.fitToSize()
+        }
     }
 
     init(command: String, repoPath: String, environment: [String: String]) {
@@ -79,6 +134,7 @@ final class GhosttyTerminalTabViewController: NSViewController, TerminalTab {
             workingDirectory: repoPath
         )
         terminalView.controller = Self.sharedController
+        Self.liveInstances.add(self)
     }
 
     override func viewDidAppear() {
@@ -174,7 +230,8 @@ final class GhosttyTerminalTabViewController: NSViewController, TerminalTab {
 extension GhosttyTerminalTabViewController:
     TerminalSurfaceTitleDelegate,
     TerminalSurfaceResizeDelegate,
-    TerminalSurfaceCloseDelegate
+    TerminalSurfaceCloseDelegate,
+    TerminalSurfaceOpenURLDelegate
 {
     func terminalDidChangeTitle(_: String) {}
 
@@ -184,5 +241,14 @@ extension GhosttyTerminalTabViewController:
         DispatchQueue.main.async { [weak self] in
             self?.onProcessExited?()
         }
+    }
+
+    /// Cmd-click on a hyperlink (OSC 8 or auto-detected URL) — hand it to
+    /// the system to open in the default browser. Without this conformance,
+    /// libghostty surfaces the action but nothing happens, which is why PR
+    /// links Claude prints stopped working under libghostty.
+    func terminalDidRequestOpenURL(_ url: String, kind _: TerminalOpenURLKind) {
+        guard let nsURL = URL(string: url) else { return }
+        NSWorkspace.shared.open(nsURL)
     }
 }

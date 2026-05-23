@@ -7,3 +7,4 @@ DerivedData/
 appcast*.xml
 .sparkle-tools/
 scripts/AppIcon.iconset/
+.claude/
