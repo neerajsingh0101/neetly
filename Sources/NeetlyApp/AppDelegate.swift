@@ -76,6 +76,19 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             sessionWindowController?.onNewSession = { [weak self] in
                 self?.showSetupWindow()
             }
+            sessionWindowController?.onAllSessionsClosed = { [weak self] in
+                // Last session closed — return to the launch screen and drop the
+                // now-empty session window (recreated on the next launch).
+                // Deferred so closeSession fully returns before we tear it down.
+                DispatchQueue.main.async {
+                    guard let self else { return }
+                    if self.setupWindowController?.window?.isVisible != true {
+                        self.showSetupWindow()
+                    }
+                    self.sessionWindowController?.close()
+                    self.sessionWindowController = nil
+                }
+            }
             sessionWindowController?.showWindow(nil)
         }
 

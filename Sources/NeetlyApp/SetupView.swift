@@ -1052,14 +1052,27 @@ struct SettingsScreen: View {
     @State private var worktreeDir: String = NeetlySettings.shared.worktreeBaseDir
     @State private var diffCommand: String = NeetlySettings.shared.diffCommand
     @State private var postCreateCommand: String = NeetlySettings.shared.postWorktreeCreateCommand
+    @State private var fontFamily: String = TerminalConfig.load().fontFamily ?? SettingsScreen.defaultFontLabel
     @State private var fontSize: Int = Int(TerminalConfig.load().fontSize ?? 17)
     @State private var themeName: String = TerminalConfig.load().theme ?? TerminalConfig.neetlyThemeName
     @State private var showingThemePicker = false
     @State private var worktreeError: String?
+    @State private var tab: SettingsTab = .general
     @FocusState private var focusedField: Field?
     var onBack: () -> Void
 
     private enum Field { case worktreeDir, postCreate, diffCommand }
+    private enum SettingsTab: String, CaseIterable {
+        case general = "General", appearance = "Appearance", shortcuts = "Shortcuts"
+    }
+
+    /// Font-picker entry for "no explicit family" — `fontFamily = nil`, which
+    /// `makeConfiguration` resolves to JetBrains Mono (then ghostty's default).
+    private static let defaultFontLabel = "Default (JetBrains Mono)"
+    /// Monospaced font families installed on this machine.
+    private static let monoFamilies: [String] = NSFontManager.shared.availableFontFamilies
+        .filter { NSFont(name: $0, size: 12)?.isFixedPitch == true }
+        .sorted()
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -1075,147 +1088,28 @@ struct SettingsScreen: View {
             Text("neetly")
                 .font(.system(size: 29, weight: .bold, design: .monospaced))
                 .padding(.horizontal, 20)
-                .padding(.bottom, 24)
+                .padding(.bottom, 16)
+
+            tabSwitcher
+                .padding(.horizontal, 20)
+                .padding(.bottom, 12)
 
             Divider()
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 24) {
-                    Text("Settings")
-                        .font(.system(size: 22, weight: .semibold))
-                        .padding(.top, 20)
-
-                    // Worktree directory
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Worktree Directory")
-                            .font(.system(size: 16, weight: .medium))
-                        Text("The directory where neetly creates git worktrees for your sessions.")
-                            .font(.system(size: 13))
-                            .foregroundColor(.secondary)
-                        HStack {
-                            TextField("", text: $worktreeDir)
-                                .textFieldStyle(.roundedBorder)
-                                .font(.system(size: 15, design: .monospaced))
-                                .focused($focusedField, equals: .worktreeDir)
-                                .onSubmit { commitWorktreeDir() }
-                            Button("Browse...") { pickDirectory() }
-                        }
-                        if let worktreeError {
-                            Text(worktreeError)
-                                .font(.system(size: 13))
-                                .foregroundColor(.red)
-                        }
+                    switch tab {
+                    case .general: generalTab
+                    case .appearance: appearanceTab
+                    case .shortcuts: shortcutsTab
                     }
-
-                    // Post-create command
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Post-Create Command")
-                            .font(.system(size: 16, weight: .medium))
-                        Text("Runs after a new worktree is created. Use $WORKTREE_DIRECTORY for the worktree's absolute path. Leave blank to skip. A common use case is running mise trust $WORKTREE_DIRECTORY for the folks who use mise to manage their Ruby versions.")
-                            .font(.system(size: 13))
-                            .foregroundColor(.secondary)
-                        TextField("e.g. mise trust $WORKTREE_DIRECTORY", text: $postCreateCommand)
-                            .textFieldStyle(.roundedBorder)
-                            .font(.system(size: 15, design: .monospaced))
-                            .focused($focusedField, equals: .postCreate)
-                            .onSubmit { commitPostCreate() }
-                    }
-
-                    Divider()
-
-                    // Cmd+G: Open Diff
-                    VStack(alignment: .leading, spacing: 8) {
-                        HStack(spacing: 6) {
-                            Text("Open Diff")
-                                .font(.system(size: 16, weight: .medium))
-                            Text("Cmd+G")
-                                .font(.system(size: 11, weight: .medium, design: .monospaced))
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 2)
-                                .background(Theme.bg3C)
-                                .cornerRadius(4)
-                        }
-                        Text("Opens a terminal in the last pane with this command and maximizes it.")
-                            .font(.system(size: 13))
-                            .foregroundColor(.secondary)
-                        TextField("", text: $diffCommand)
-                            .textFieldStyle(.roundedBorder)
-                            .font(.system(size: 15, design: .monospaced))
-                            .focused($focusedField, equals: .diffCommand)
-                            .onSubmit { commitDiffCommand() }
-                    }
-
-                    // Cmd+Shift+G: Close Diff (read-only)
-                    VStack(alignment: .leading, spacing: 8) {
-                        HStack(spacing: 6) {
-                            Text("Close Diff")
-                                .font(.system(size: 16, weight: .medium))
-                            Text("Cmd+Shift+G")
-                                .font(.system(size: 11, weight: .medium, design: .monospaced))
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 2)
-                                .background(Theme.bg3C)
-                                .cornerRadius(4)
-                        }
-                        Text("Unmaximizes the pane and closes the active tab. This is not configurable.")
-                            .font(.system(size: 13))
-                            .foregroundColor(.secondary)
-                    }
-
-                    Divider()
-
-                    // Terminal font size
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Terminal Font Size")
-                            .font(.system(size: 16, weight: .medium))
-                        Text("Point size for text in terminal tabs. Changes apply to open terminals immediately.")
-                            .font(.system(size: 13))
-                            .foregroundColor(.secondary)
-                        Stepper(value: $fontSize, in: 8 ... 32) {
-                            Text("\(fontSize) pt")
-                                .font(.system(size: 15, design: .monospaced))
-                        }
-                        .frame(width: 130, alignment: .leading)
-                    }
-
-                    Divider()
-
-                    // Terminal theme — built-in Neetly Default, any GhosttyTheme, or Custom.
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Terminal Theme")
-                            .font(.system(size: 16, weight: .medium))
-                        Text("Colors for terminal tabs. Neetly Default matches the app chrome; or pick any GhosttyTheme, or choose Custom to set your own. Changes apply to open terminals immediately.")
-                            .font(.system(size: 13))
-                            .foregroundColor(.secondary)
-                        HStack(spacing: 10) {
-                            Text(themeName)
-                                .font(.system(size: 15, design: .monospaced))
-                                .foregroundColor(.secondary)
-                            Button("Choose…") { showingThemePicker = true }
-                                .popover(isPresented: $showingThemePicker, arrowEdge: .bottom) {
-                                    ThemePickerView()
-                                }
-                        }
-                        if themeName == TerminalConfig.customThemeName {
-                            VStack(alignment: .leading, spacing: 10) {
-                                ColorPicker("Background", selection: customColor(\.backgroundColor, default: NeetlyTerminalTheme.background), supportsOpacity: false)
-                                ColorPicker("Foreground", selection: customColor(\.foregroundColor, default: NeetlyTerminalTheme.foreground), supportsOpacity: false)
-                                ColorPicker("Accent / Links", selection: customColor(\.linkColor, default: NeetlyTerminalTheme.cursor), supportsOpacity: false)
-                                ColorPicker("Selection", selection: customColor(\.selectionColor, default: NeetlyTerminalTheme.selection), supportsOpacity: false)
-                            }
-                            .font(.system(size: 14))
-                            .frame(width: 260, alignment: .leading)
-                            .padding(.top, 4)
-                        }
-                    }
-
                 }
-                .padding(.horizontal, 20)
-                .padding(.bottom, 20)
+                .padding(20)
             }
         }
         .frame(minWidth: 700, minHeight: 600)
         .onChange(of: fontSize) { _, _ in commitFontSize() }
+        .onChange(of: fontFamily) { _, _ in commitFontFamily() }
         .onChange(of: showingThemePicker) { _, isShowing in
             // Reflect the picked theme (and whether to show the custom wells)
             // when the popover closes.
@@ -1233,6 +1127,191 @@ struct SettingsScreen: View {
             }
         }
     }
+
+    // MARK: Tab switcher
+
+    private var tabSwitcher: some View {
+        HStack(spacing: 4) {
+            ForEach(SettingsTab.allCases, id: \.self) { t in
+                Button { tab = t } label: {
+                    Text(t.rawValue)
+                        .font(.system(size: 13, weight: tab == t ? .semibold : .regular))
+                        .foregroundColor(tab == t ? Theme.fg1C : Theme.fg3C)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                        .background(tab == t ? Theme.bg2C : Color.clear)
+                        .cornerRadius(6)
+                }
+                .buttonStyle(.plain)
+            }
+            Spacer()
+        }
+    }
+
+    // MARK: General
+
+    @ViewBuilder private var generalTab: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Worktree Directory")
+                .font(.system(size: 16, weight: .medium))
+            Text("The directory where neetly creates git worktrees for your sessions.")
+                .font(.system(size: 13))
+                .foregroundColor(.secondary)
+            HStack {
+                TextField("", text: $worktreeDir)
+                    .textFieldStyle(.roundedBorder)
+                    .font(.system(size: 15, design: .monospaced))
+                    .focused($focusedField, equals: .worktreeDir)
+                    .onSubmit { commitWorktreeDir() }
+                Button("Browse...") { pickDirectory() }
+            }
+            if let worktreeError {
+                Text(worktreeError)
+                    .font(.system(size: 13))
+                    .foregroundColor(.red)
+            }
+        }
+
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Post-Create Command")
+                .font(.system(size: 16, weight: .medium))
+            Text("Runs after a new worktree is created. Use $WORKTREE_DIRECTORY for the worktree's absolute path. Leave blank to skip. A common use case is running mise trust $WORKTREE_DIRECTORY for the folks who use mise to manage their Ruby versions.")
+                .font(.system(size: 13))
+                .foregroundColor(.secondary)
+            TextField("e.g. mise trust $WORKTREE_DIRECTORY", text: $postCreateCommand)
+                .textFieldStyle(.roundedBorder)
+                .font(.system(size: 15, design: .monospaced))
+                .focused($focusedField, equals: .postCreate)
+                .onSubmit { commitPostCreate() }
+        }
+
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Git Diff Command")
+                .font(.system(size: 16, weight: .medium))
+            Text("The command ⌘G runs to open a diff in the last pane (maximized); ⌘⇧G closes it. Configure the diff tool here.")
+                .font(.system(size: 13))
+                .foregroundColor(.secondary)
+            TextField("", text: $diffCommand)
+                .textFieldStyle(.roundedBorder)
+                .font(.system(size: 15, design: .monospaced))
+                .focused($focusedField, equals: .diffCommand)
+                .onSubmit { commitDiffCommand() }
+        }
+    }
+
+    // MARK: Appearance
+
+    @ViewBuilder private var appearanceTab: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Terminal Font")
+                .font(.system(size: 16, weight: .medium))
+            Text("Monospaced font for terminal tabs. Applies to open terminals immediately.")
+                .font(.system(size: 13))
+                .foregroundColor(.secondary)
+            Picker("", selection: $fontFamily) {
+                Text(Self.defaultFontLabel).tag(Self.defaultFontLabel)
+                ForEach(Self.monoFamilies, id: \.self) { fam in
+                    Text(fam).tag(fam)
+                }
+            }
+            .labelsHidden()
+            .frame(width: 280, alignment: .leading)
+        }
+
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Terminal Font Size")
+                .font(.system(size: 16, weight: .medium))
+            Text("Point size for text in terminal tabs. Changes apply to open terminals immediately.")
+                .font(.system(size: 13))
+                .foregroundColor(.secondary)
+            Stepper(value: $fontSize, in: 8 ... 32) {
+                Text("\(fontSize) pt")
+                    .font(.system(size: 15, design: .monospaced))
+            }
+            .frame(width: 130, alignment: .leading)
+        }
+
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Terminal Theme")
+                .font(.system(size: 16, weight: .medium))
+            Text("Colors for terminal tabs and the app chrome. Neetly Default matches the design; or pick any GhosttyTheme, or choose Custom to set your own. Applies immediately.")
+                .font(.system(size: 13))
+                .foregroundColor(.secondary)
+            HStack(spacing: 10) {
+                Text(themeName)
+                    .font(.system(size: 15, design: .monospaced))
+                    .foregroundColor(.secondary)
+                Button("Choose…") { showingThemePicker = true }
+                    .popover(isPresented: $showingThemePicker, arrowEdge: .bottom) {
+                        ThemePickerView()
+                    }
+            }
+            if themeName == TerminalConfig.customThemeName {
+                VStack(alignment: .leading, spacing: 10) {
+                    ColorPicker("Background", selection: customColor(\.backgroundColor, default: NeetlyTerminalTheme.background), supportsOpacity: false)
+                    ColorPicker("Foreground", selection: customColor(\.foregroundColor, default: NeetlyTerminalTheme.foreground), supportsOpacity: false)
+                    ColorPicker("Accent / Links", selection: customColor(\.linkColor, default: NeetlyTerminalTheme.cursor), supportsOpacity: false)
+                    ColorPicker("Selection", selection: customColor(\.selectionColor, default: NeetlyTerminalTheme.selection), supportsOpacity: false)
+                }
+                .font(.system(size: 14))
+                .frame(width: 260, alignment: .leading)
+                .padding(.top, 4)
+            }
+        }
+    }
+
+    // MARK: Shortcuts
+
+    @ViewBuilder private var shortcutsTab: some View {
+        // Mirrors AppDelegate.setupMainMenu — keep in sync when bindings change.
+        ForEach(Array(Self.shortcutSections.enumerated()), id: \.offset) { _, group in
+            VStack(alignment: .leading, spacing: 8) {
+                Text(group.title)
+                    .font(.system(size: 16, weight: .semibold))
+                ForEach(Array(group.rows.enumerated()), id: \.offset) { _, row in
+                    HStack(spacing: 10) {
+                        Text(row.keys)
+                            .font(.system(size: 12, weight: .medium, design: .monospaced))
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(Theme.bg3C)
+                            .cornerRadius(4)
+                        Text(row.action)
+                            .font(.system(size: 13))
+                            .foregroundColor(.secondary)
+                        Spacer()
+                    }
+                }
+            }
+        }
+    }
+
+    private static let shortcutSections: [(title: String, rows: [(keys: String, action: String)])] = [
+        ("Panes", [
+            ("⌘H / ⌘J / ⌘K / ⌘L", "Focus pane left / down / up / right"),
+            ("⌘D / ⌘⇧D", "Split pane right / down"),
+            ("⌘⇧W", "Close pane"),
+            ("⌘⇧M", "Maximize / restore pane"),
+        ]),
+        ("Tabs", [
+            ("⌘1 … ⌘9", "Focus tab N in the focused pane"),
+            ("⌘⇧[ / ⌘⇧]", "Previous / next tab"),
+            ("⌘T / ⌘⇧T", "New terminal / browser tab"),
+            ("⌘W", "Close tab"),
+            ("⌘R", "Reload browser"),
+            ("⌘G / ⌘⇧G", "Open / close diff"),
+        ]),
+        ("Sessions", [
+            ("⌘⌥1 … ⌘⌥9", "Focus session N"),
+            ("⌘⌥[ / ⌘⌥]", "Previous / next session"),
+            ("⌘N / ⌘⇧N", "New / close session"),
+        ]),
+        ("Terminal & app", [
+            ("⌃L", "Clear terminal"),
+            ("⌘,", "Open Settings"),
+            ("⌘Q", "Quit neetly"),
+        ]),
+    ]
 
     private func pickDirectory() {
         let panel = NSOpenPanel()
@@ -1282,6 +1361,15 @@ struct SettingsScreen: View {
     private func commitFontSize() {
         var config = TerminalConfig.load()
         config.fontSize = CGFloat(fontSize)
+        config.save()
+        if TerminalEngine.current == .ghostty {
+            GhosttyTerminalTabViewController.reloadConfiguration()
+        }
+    }
+
+    private func commitFontFamily() {
+        var config = TerminalConfig.load()
+        config.fontFamily = (fontFamily == Self.defaultFontLabel) ? nil : fontFamily
         config.save()
         if TerminalEngine.current == .ghostty {
             GhosttyTerminalTabViewController.reloadConfiguration()

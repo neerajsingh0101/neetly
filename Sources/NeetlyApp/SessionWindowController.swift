@@ -180,6 +180,9 @@ class SessionWindowController: NSWindowController {
     private var prRefreshTimer: Timer?
     private var diffStatsTimer: Timer?
     var onNewSession: (() -> Void)?
+    /// Fired when the last session closes, so the app can return to the launch
+    /// screen instead of leaving an empty session window.
+    var onAllSessionsClosed: (() -> Void)?
 
     init() {
         let window = NSWindow(
@@ -406,6 +409,7 @@ class SessionWindowController: NSWindowController {
             diffStatsTimer?.invalidate()
             diffStatsTimer = nil
             refreshTabBar()
+            onAllSessionsClosed?()
         } else {
             activeIndex = min(max(0, activeIndex), sessions.count - 1)
             selectSession(at: activeIndex)
