@@ -1,4 +1,4 @@
-# neetly
+# Neetly
 
 Neetly is a Mac code editor built for **web development** and designed to work with AI agents.
 
@@ -12,23 +12,23 @@ Neetly is a Mac code editor built for **web development** and designed to work w
 
 * **Built in Browser** - each tab/session gets its own browser.
 * **Worktree enabled** - each tab/session gets its own worktree.
-* **detach session** - once the work is done, detach from the session. You can attach to the session at any time later. When you attach to the session, then Claude also resumes from where you left off with full context.
-* **See PR status** - you can see the status of the PR in the session panel.
+* **Detach session** - once the work is done, detach from the session. You can attach to the session at any time later. When you attach to the session, then Claude also resumes from where you left off with full context.
+* **PR status** - you can see the status of the PR in the session panel.
 * **Custom layout** -  arrange your pane the way you want. Give 40% to Claude and the rest to the browser.
 * **Programmatically open tab** - after starting the server, you want to open the browser at a specific place.
-* **small codebase** - Codebase is small enough that you can make changes to meet your needs.
+* **Small codebase** - Codebase is small enough that you can make changes to meet your needs.
 * **One click diff view** - execute Cmd+G to see the diff. You can use any tool you want to see the diff.
+* **No login required** - No login required.
+* **Mac only** - At this time Neetly is Mac only.
 
 ## Installation instructions
 
 1. Download [neetly-macos.dmg](https://github.com/neetozone/neetly/releases/latest/download/neetly-macos.dmg) and open the DMG and drag `neetly.app` to Applications.
-2. Set up Claude Code notifications (one-time): Execute the following command to do a one-time setup. It adds hooks to `~/.claude/settings.json` so that neetly
-   is notified when Claude is done processing and is waiting. When Claude is done, the session tab turns "green".
-    If Claude is waiting for permission, then the session tab turns "red". Clicking a colored session tab also clears the color.
+2. Set up Claude Code notifications (one-time): Execute the following command to do a one-time setup. It adds hooks to `~/.claude/settings.json` so that neetly is notified when Claude is done processing and is waiting. When Claude is done, the session tab turns "green". If Claude is waiting for permission, then the session tab turns "red". Clicking a colored session tab also clears the color.
 
-   ```bash
-   /Applications/neetly.app/Contents/MacOS/neetly notify_neetly_of_claude_events
-   ```
+```bash
+/Applications/neetly.app/Contents/MacOS/neetly notify_neetly_of_claude_events
+```
 
 ### Build from source
 
@@ -42,6 +42,104 @@ ln -sf $(pwd)/.build/arm64-apple-macosx/debug/neetly /usr/local/bin/neetly
 
 # Run
 swift run neetly-app
+```
+
+## Usage
+
+Typically we at [Neeto](https://neeto.com), run Claude or the AI agent on the left side pane.
+On the right side pane we start the server that opens a browser when the server is booted.
+
+```text
+┌──────────────────────────────────────────────────────────────────────────┐
+│ neetly — my-app                                                          │
+├─────────────────────────────────┬────────────────────────────────────────┤
+│ [ >_ claude ]                   │ [ >_ bin/dev ]   [ (web) :3000 ]       │
+├─────────────────────────────────┼────────────────────────────────────────┤
+│                                 │                                        │
+│ > plan the schema migration     │ ▸ Listening on :3000                   │
+│                                 │ ▸ Compiled successfully                │
+│ ⏺ I'll start by reading the     │ GET /              200  in 42 ms       │
+│   existing migrations …         │ GET /assets/app    200  in  8 ms       │
+│                                 │                                        │
+│ [reads files]                   │ (switch to the browser tab to see      │
+│ [proposes plan]                 │  the running app at localhost:3000)    │
+│ …                               │                                        │
+│                                 │                                        │
+│   the AI agent in a real PTY    │   a terminal tab (dev server / tunnel) │
+│   (Claude / Codex / Aider / …)  │   next to a browser tab on the same    │
+│                                 │   URL, side by side                    │
+│                                 │                                        │
+└─────────────────────────────────┴────────────────────────────────────────┘
+```
+
+In the Repository settings we have code typically like this:
+
+```
+split: columns
+left:
+  size: 40%
+  run: claude --dangerously-skip-permissions
+right:
+  run: bin/setup && bin/launch --neetly
+```
+
+This splits the session into two panes. Left pane gets 40% space and
+the remaining is given to the right pane.
+
+In the left pane we are running `claude`. In the right pane we are
+setting up the sample data and then launching the server.
+
+In our `bin/launch` we have the following line. This opens
+the browser when the server is booted.
+
+```
+if ARGV.include?("--neetly")
+  system "neetly browser open #{url}"
+end
+```
+
+## Settings
+
+Open with **Cmd+,** — the worktree directory, the diff command, the
+terminal font size, and the terminal theme all live here. Changes apply
+live; there's no Save button.
+
+```text
+┌──────────────────────────────────────────────────────────────────────────┐
+│ Settings                                                                 │
+├──────────────────────────────────────────────────────────────────────────┤
+│                                                                          │
+│  Worktree Directory                                                      │
+│  The directory where neetly creates git worktrees for your sessions.     │
+│  [ /Users/you/neetly-worktrees                          ]  [ Browse… ]   │
+│                                                                          │
+│  Post-Create Command                                                     │
+│  Runs after a new worktree is created. Use $WORKTREE_DIRECTORY for the   │
+│  worktree's absolute path. Leave blank to skip.                          │
+│  [ mise trust $WORKTREE_DIRECTORY                                     ]  │
+│                                                                          │
+│  ──────────────────────────────────────────────────────────────────────  │
+│                                                                          │
+│  Open Diff   [Cmd+G]                                                     │
+│  Opens a terminal in the last pane with this command and maximizes it.   │
+│  [ git diff                                                           ]  │
+│                                                                          │
+│  Close Diff  [Cmd+Shift+G]                                               │
+│  Unmaximizes the pane and closes the active tab. Not configurable.       │
+│                                                                          │
+│  ──────────────────────────────────────────────────────────────────────  │
+│                                                                          │
+│  Terminal Font Size                                                      │
+│  Point size for text in terminal tabs. Changes apply immediately.        │
+│  [ −  17 pt  + ]                                                         │
+│                                                                          │
+│  ──────────────────────────────────────────────────────────────────────  │
+│                                                                          │
+│  Terminal Theme                                                          │
+│  Colors for terminal tabs. Changes apply to open terminals immediately.  │
+│  Catppuccin Mocha    [ Choose… ]                                         │
+│                                                                          │
+└──────────────────────────────────────────────────────────────────────────┘
 ```
 
 ## Resetting to the default settings
@@ -105,7 +203,7 @@ right:
 | `visit` | `<url>` | Browser tab |
 | `size` | `35%` | Percentage of the parent split taken by this child. Optional; defaults to 50/50. |
 
-### Sizing splits
+### Split into a particular size
 
 By default, every split is 50/50. Add a `size` attribute to any child to change that:
 
