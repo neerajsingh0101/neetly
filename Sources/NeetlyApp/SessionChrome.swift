@@ -13,9 +13,10 @@ import SwiftUI
 // MARK: - Launch-screen session state
 
 /// The live Claude state of a session as surfaced on the launch screen. Only
-/// *open* sessions have a real state; everything listed but not open is `idle`.
+/// *open* sessions have a real state; everything listed but not open is
+/// `detached`.
 enum LaunchSessionState {
-    case done, awaiting, working, active, idle
+    case done, awaiting, active, detached
 }
 
 // MARK: - Row model

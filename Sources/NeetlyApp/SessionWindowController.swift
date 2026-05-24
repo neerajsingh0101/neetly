@@ -446,14 +446,13 @@ class SessionWindowController: NSWindowController {
     func activeSessionIndex() -> Int { activeIndex }
 
     /// Launch-screen helper: the live Claude state of the session whose worktree
-    /// is `repoPath`. Returns `.idle` when that session isn't currently open, so
-    /// the launch screen never shows a fabricated state.
+    /// is `repoPath`. Returns `.detached` when that session isn't currently open,
+    /// so the launch screen never shows a fabricated state.
     func launchState(repoPath: String) -> LaunchSessionState {
-        guard let ws = sessions.first(where: { $0.config.repoPath == repoPath }) else { return .idle }
+        guard let ws = sessions.first(where: { $0.config.repoPath == repoPath }) else { return .detached }
         guard let color = ws.statusColor else { return .active }
         if color == Theme.green { return .done }
         if color == Theme.red { return .awaiting }
-        if color == Theme.amber { return .working }
         return .active
     }
 

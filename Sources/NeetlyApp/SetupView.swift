@@ -559,9 +559,8 @@ private func launchStateColor(_ s: LaunchSessionState) -> Color {
     switch s {
     case .done:     return Theme.greenC
     case .awaiting: return Theme.redC
-    case .working:  return Theme.amberC
     case .active:   return Theme.accentC
-    case .idle:     return Theme.fg4C
+    case .detached: return Theme.fg4C
     }
 }
 
@@ -569,17 +568,16 @@ private func launchStateLabel(_ s: LaunchSessionState) -> String {
     switch s {
     case .done:     return "done"
     case .awaiting: return "awaiting"
-    case .working:  return "working"
     case .active:   return "active"
-    case .idle:     return "idle"
+    case .detached: return "detached"
     }
 }
 
 /// The live Claude state of a listed session, via the open session window.
-/// Returns `.idle` when the session isn't currently open.
+/// Returns `.detached` when the session isn't currently open.
 private func liveLaunchState(repoName: String, worktreeName: String) -> LaunchSessionState {
     let path = GitWorktree.worktreePath(repoName: repoName, worktreeName: worktreeName)
-    return (NSApp.delegate as? AppDelegate)?.sessionWindowController?.launchState(repoPath: path) ?? .idle
+    return (NSApp.delegate as? AppDelegate)?.sessionWindowController?.launchState(repoPath: path) ?? .detached
 }
 
 // MARK: - Blinking caret
