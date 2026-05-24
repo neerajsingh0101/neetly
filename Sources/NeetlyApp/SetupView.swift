@@ -196,20 +196,12 @@ struct RepoListScreen: View {
     @State private var expanded: Set<UUID> = []
     @State private var sessionsByRepo: [String: [SessionListEntry]] = [:]
     @State private var pendingDelete: PendingSessionDelete?
+    @State private var pendingRepoDelete: RepoConfig?
 
     private var sortedRepos: [RepoConfig] {
         repos.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
     }
     private var totalSessions: Int { sessionsByRepo.values.reduce(0) { $0 + $1.count } }
-    private var needInput: Int {
-        var n = 0
-        for (repoName, entries) in sessionsByRepo {
-            for e in entries where liveLaunchState(repoName: repoName, worktreeName: e.worktreeName) == .awaiting {
-                n += 1
-            }
-        }
-        return n
-    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -225,11 +217,7 @@ struct RepoListScreen: View {
                             onLaunch: { entry in onLaunchSession(repo, entry.sessionName, entry.worktreeName) },
                             onNewSession: { onNewSession(repo) },
                             onEditLayout: { onEditLayout(repo) },
-                            onDeleteRepo: {
-                                RepoStore.shared.remove(id: repo.id)
-                                repos = RepoStore.shared.load()
-                                reload()
-                            },
+                            onDeleteRepo: { pendingRepoDelete = repo },
                             onDeleteSession: { entry in pendingDelete = PendingSessionDelete(repo: repo, entry: entry) }
                         )
                     }
@@ -242,14 +230,31 @@ struct RepoListScreen: View {
         .background(Theme.bg0C)
         .background(WindowHeightSizer(targetHeight: targetHeight))
         .onAppear { reload() }
-        .sheet(item: $pendingDelete) { p in
-            DeleteWorktreeSheet(
-                repoName: p.repo.name,
-                sessionName: p.entry.sessionName,
-                worktreeName: p.entry.worktreeName,
-                onCancel: { pendingDelete = nil },
-                onDelete: { performDelete(p) }
-            )
+        .alert(
+            "Delete session?",
+            isPresented: Binding(
+                get: { pendingDelete != nil },
+                set: { if !$0 { pendingDelete = nil } }
+            ),
+            presenting: pendingDelete
+        ) { p in
+            Button("Delete", role: .destructive) { performDelete(p) }
+            Button("Cancel", role: .cancel) { }
+        } message: { p in
+            Text("“\(p.entry.sessionName)” and its associated worktree will be permanently deleted.")
+        }
+        .alert(
+            "Delete repo?",
+            isPresented: Binding(
+                get: { pendingRepoDelete != nil },
+                set: { if !$0 { pendingRepoDelete = nil } }
+            ),
+            presenting: pendingRepoDelete
+        ) { repo in
+            Button("Delete", role: .destructive) { performRepoDelete(repo) }
+            Button("Cancel", role: .cancel) { }
+        } message: { repo in
+            Text("“\(repo.name)” will be removed from neetly and all worktrees associated with the repo will be permanently deleted.")
         }
     }
 
@@ -307,10 +312,6 @@ struct RepoListScreen: View {
         HStack(spacing: 0) {
             Text("\(repos.count) repos · \(totalSessions) sessions")
                 .foregroundColor(Theme.fg3C)
-            if needInput > 0 {
-                Text(" · ").foregroundColor(Theme.fg4C)
-                Text("\(needInput) need input").foregroundColor(Theme.redC)
-            }
         }
         .font(.system(size: 13, design: .monospaced))
     }
@@ -361,6 +362,34 @@ struct RepoListScreen: View {
         }
         reload()
     }
+
+    /// Remove a repo from neetly and delete every worktree it created. The
+    /// original repo checkout (`repo.path`) is never touched.
+    private func performRepoDelete(_ repo: RepoConfig) {
+        let worktrees = GitWorktree.listWorktrees(for: repo.name)
+        for wt in worktrees {
+            let path = GitWorktree.worktreePath(repoName: repo.name, worktreeName: wt)
+            SessionStore.shared.remove(repoPath: path, worktreeName: wt)
+            (NSApp.delegate as? AppDelegate)?.sessionWindowController?.closeSessionByPath(path)
+            ActivityStore.shared.log(.sessionDeleted, repoName: repo.name, detail: wt)
+        }
+        RepoStore.shared.remove(id: repo.id)
+        pendingRepoDelete = nil
+
+        let repoPath = repo.path
+        let repoName = repo.name
+        DispatchQueue.global(qos: .userInitiated).async {
+            for wt in worktrees {
+                _ = GitWorktree.deleteWorktree(parentRepoPath: repoPath, repoName: repoName, worktreeName: wt)
+            }
+            // Remove the now-empty per-repo worktrees folder so nothing is orphaned.
+            let parent = "\(NeetlySettings.shared.worktreeBaseDir)/\(repoName)"
+            try? FileManager.default.removeItem(atPath: parent)
+        }
+        repos = RepoStore.shared.load()
+        reload()
+    }
+
 }
 
 private struct PendingSessionDelete: Identifiable {
@@ -382,52 +411,55 @@ private struct RepoGroupRow: View {
     var onDeleteRepo: () -> Void
     var onDeleteSession: (SessionListEntry) -> Void
 
-    private var states: [LaunchSessionState] {
-        sessions.map { liveLaunchState(repoName: repo.name, worktreeName: $0.worktreeName) }
-    }
-
     var body: some View {
         VStack(spacing: 0) {
-            Button(action: onToggle) {
-                HStack(spacing: 10) {
-                    Text(repo.name)
-                        .font(.system(size: 17, weight: .semibold))
-                        .foregroundColor(Theme.fg1C)
-                    Text(repo.path.replacingOccurrences(of: FileManager.default.homeDirectoryForCurrentUser.path, with: "~"))
-                        .font(.system(size: 13, design: .monospaced))
-                        .foregroundColor(Theme.fg4C)
-                        .lineLimit(1)
-                        .truncationMode(.middle)
-                    Spacer(minLength: 12)
-                    if !sessions.isEmpty {
-                        HStack(spacing: 4) {
-                            ForEach(Array(states.prefix(5).enumerated()), id: \.offset) { _, s in
-                                Circle().fill(launchStateColor(s)).frame(width: 7, height: 7)
-                            }
-                        }
-                        Text("\(sessions.count)")
+            HStack(spacing: 8) {
+                Button(action: onToggle) {
+                    HStack(spacing: 10) {
+                        Text(repo.name)
+                            .font(.system(size: 17, weight: .semibold))
+                            .foregroundColor(Theme.fg1C)
+                        Text(repo.path.replacingOccurrences(of: FileManager.default.homeDirectoryForCurrentUser.path, with: "~"))
                             .font(.system(size: 13, design: .monospaced))
                             .foregroundColor(Theme.fg4C)
-                    } else {
-                        Text("no sessions")
-                            .font(.system(size: 13, design: .monospaced))
-                            .foregroundColor(Theme.fg4C)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                        Spacer(minLength: 12)
                     }
+                    .frame(maxWidth: .infinity)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+
+                Menu {
+                    Button("Edit Layout", action: onEditLayout)
+                    Divider()
+                    Button("Delete Repo", role: .destructive, action: onDeleteRepo)
+                } label: {
+                    Image(systemName: "ellipsis")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(Theme.fg4C)
+                        .frame(width: 32, height: 32)
+                        .contentShape(Rectangle())
+                }
+                .menuStyle(.button)
+                .buttonStyle(.plain)
+                .menuIndicator(.hidden)
+                .fixedSize()
+                .help("More actions")
+
+                Button(action: onToggle) {
                     Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundColor(Theme.fg4C)
+                        .frame(width: 26, height: 26)
+                        .contentShape(Rectangle())
                 }
-                .padding(.horizontal, 14)
-                .padding(.vertical, 13)
-                .contentShape(Rectangle())
+                .buttonStyle(.plain)
             }
-            .buttonStyle(.plain)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 13)
             .background(RoundedRectangle(cornerRadius: 10).fill(isExpanded ? Theme.bg2C : Color.clear))
-            .contextMenu {
-                Button("Edit Layout\u{2026}", action: onEditLayout)
-                Divider()
-                Button("Delete Repo", role: .destructive, action: onDeleteRepo)
-            }
 
             if isExpanded {
                 ForEach(sessions) { entry in
@@ -468,33 +500,39 @@ private struct LaunchSessionRow: View {
     }
 
     var body: some View {
-        Button(action: onLaunch) {
-            HStack(spacing: 12) {
-                Circle().fill(launchStateColor(state)).frame(width: 7, height: 7)
-                    .padding(.leading, 28)
-                Text(entry.sessionName)
-                    .font(.system(size: 15))
-                    .foregroundColor(Theme.fg2C)
-                Spacer(minLength: 16)
-                Text(entry.worktreeName)
-                    .font(.system(size: 13, design: .monospaced))
-                    .foregroundColor(Theme.fg4C)
-                    .lineLimit(1)
-                Text(launchStateLabel(state))
-                    .font(.system(size: 13, design: .monospaced))
-                    .foregroundColor(launchStateColor(state))
-                    .frame(width: 72, alignment: .trailing)
+        HStack(spacing: 8) {
+            Button(action: onLaunch) {
+                HStack(spacing: 12) {
+                    Circle().fill(launchStateColor(state)).frame(width: 7, height: 7)
+                        .padding(.leading, 28)
+                    Text(entry.sessionName)
+                        .font(.system(size: 15))
+                        .foregroundColor(Theme.fg2C)
+                    Spacer(minLength: 16)
+                    Text(launchStateLabel(state))
+                        .font(.system(size: 13, design: .monospaced))
+                        .foregroundColor(launchStateColor(state))
+                        .frame(width: 72, alignment: .trailing)
+                }
+                .frame(maxWidth: .infinity)
+                .contentShape(Rectangle())
             }
-            .padding(.trailing, 16)
-            .padding(.vertical, 8)
-            .background(hovering ? Theme.bg1C : Color.clear)
-            .contentShape(Rectangle())
+            .buttonStyle(.plain)
+
+            Button(action: onDelete) {
+                Image(systemName: "trash")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundColor(Theme.fg4C)
+                    .frame(width: 32, height: 32)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .help("Delete Session")
         }
-        .buttonStyle(.plain)
+        .padding(.trailing, 16)
+        .padding(.vertical, 8)
+        .background(hovering ? Theme.bg1C : Color.clear)
         .onHover { hovering = $0 }
-        .contextMenu {
-            Button("Delete Session", role: .destructive, action: onDelete)
-        }
     }
 }
 
@@ -504,9 +542,8 @@ private func launchStateColor(_ s: LaunchSessionState) -> Color {
     switch s {
     case .done:     return Theme.greenC
     case .awaiting: return Theme.redC
-    case .working:  return Theme.amberC
     case .active:   return Theme.accentC
-    case .idle:     return Theme.fg4C
+    case .detached: return Theme.fg4C
     }
 }
 
@@ -514,17 +551,16 @@ private func launchStateLabel(_ s: LaunchSessionState) -> String {
     switch s {
     case .done:     return "done"
     case .awaiting: return "awaiting"
-    case .working:  return "working"
     case .active:   return "active"
-    case .idle:     return "idle"
+    case .detached: return "detached"
     }
 }
 
 /// The live Claude state of a listed session, via the open session window.
-/// Returns `.idle` when the session isn't currently open.
+/// Returns `.detached` when the session isn't currently open.
 private func liveLaunchState(repoName: String, worktreeName: String) -> LaunchSessionState {
     let path = GitWorktree.worktreePath(repoName: repoName, worktreeName: worktreeName)
-    return (NSApp.delegate as? AppDelegate)?.sessionWindowController?.launchState(repoPath: path) ?? .idle
+    return (NSApp.delegate as? AppDelegate)?.sessionWindowController?.launchState(repoPath: path) ?? .detached
 }
 
 // MARK: - Blinking caret
@@ -967,82 +1003,42 @@ struct SessionListScreen: View {
             sessions = loadSessions()
             fetchMissingPRInfo()
         }
-        .sheet(item: $sessionToDelete) { target in
-            DeleteWorktreeSheet(
-                repoName: repo.name,
-                sessionName: target.sessionName,
-                worktreeName: target.worktreeName,
-                onCancel: { sessionToDelete = nil },
-                onDelete: {
-                    let sessionLabel = target.sessionName
-                    let worktreeName = target.worktreeName
-                    ActivityStore.shared.log(.sessionDeleted, repoName: repo.name, detail: sessionLabel)
-                    sessions.removeAll { $0.worktreeName == worktreeName }
-                    sessionToDelete = nil
+        .alert(
+            "Delete session?",
+            isPresented: Binding(
+                get: { sessionToDelete != nil },
+                set: { if !$0 { sessionToDelete = nil } }
+            ),
+            presenting: sessionToDelete
+        ) { target in
+            Button("Delete", role: .destructive) {
+                let sessionLabel = target.sessionName
+                let worktreeName = target.worktreeName
+                ActivityStore.shared.log(.sessionDeleted, repoName: repo.name, detail: sessionLabel)
+                sessions.removeAll { $0.worktreeName == worktreeName }
 
-                    // Close the session if currently open (must be on main thread)
-                    let worktreePath = GitWorktree.worktreePath(repoName: repo.name, worktreeName: worktreeName)
-                    SessionStore.shared.remove(repoPath: worktreePath, worktreeName: worktreeName)
-                    if let appDelegate = NSApp.delegate as? AppDelegate {
-                        appDelegate.sessionWindowController?.closeSessionByPath(worktreePath)
-                    }
-
-                    // Run the actual deletion in the background
-                    let repoPath = repo.path
-                    let repoName = repo.name
-                    DispatchQueue.global(qos: .userInitiated).async {
-                        _ = GitWorktree.deleteWorktree(
-                            parentRepoPath: repoPath,
-                            repoName: repoName,
-                            worktreeName: worktreeName
-                        )
-                    }
-                }
-            )
-        }
-    }
-}
-
-struct DeleteWorktreeSheet: View {
-    let repoName: String
-    let sessionName: String
-    let worktreeName: String
-    var onCancel: () -> Void
-    var onDelete: () -> Void
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            Text("Deleting \(sessionName)?")
-                .font(.system(size: 22, weight: .semibold))
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, 24)
-                .padding(.vertical, 16)
-                .background(Theme.bg2C)
-
-            VStack(alignment: .leading, spacing: 16) {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("This will delete the worktree at:")
-                        .font(.system(size: 14))
-                    Text(GitWorktree.worktreePath(repoName: repoName, worktreeName: worktreeName)
-                        .replacingOccurrences(of: FileManager.default.homeDirectoryForCurrentUser.path, with: "~"))
-                        .font(.system(size: 13, design: .monospaced))
-                        .foregroundColor(.secondary)
-                        .lineLimit(1)
-                        .truncationMode(.middle)
+                // Close the session if currently open (must be on main thread)
+                let worktreePath = GitWorktree.worktreePath(repoName: repo.name, worktreeName: worktreeName)
+                SessionStore.shared.remove(repoPath: worktreePath, worktreeName: worktreeName)
+                if let appDelegate = NSApp.delegate as? AppDelegate {
+                    appDelegate.sessionWindowController?.closeSessionByPath(worktreePath)
                 }
 
-                HStack {
-                    Spacer()
-                    Button("Cancel", action: onCancel)
-                        .keyboardShortcut(.cancelAction)
-                    Button("Delete", role: .destructive, action: onDelete)
-                        .keyboardShortcut(.return)
-                        .buttonStyle(.borderedProminent)
+                // Run the actual deletion in the background
+                let repoPath = repo.path
+                let repoName = repo.name
+                DispatchQueue.global(qos: .userInitiated).async {
+                    _ = GitWorktree.deleteWorktree(
+                        parentRepoPath: repoPath,
+                        repoName: repoName,
+                        worktreeName: worktreeName
+                    )
                 }
             }
-            .padding(24)
+            Button("Cancel", role: .cancel) { }
+        } message: { target in
+            Text("“\(target.sessionName)” and its associated worktree will be permanently deleted.")
         }
-        .frame(width: 600)
     }
 }
 

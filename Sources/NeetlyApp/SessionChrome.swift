@@ -5,17 +5,18 @@ import SwiftUI
 ///   ─ a horizontal session strip across the top (flat, sharp tabs)
 ///   ─ a slim bottom status footer (branch · diff · commit · PR)
 ///
-/// Sharp and minimal: no rounded pills — flat tabs with an accent underline for
-/// the active session and hairline seams. The strip sits in the (transparent)
+/// Sharp and minimal: no rounded pills — flat tabs (the active one carries a
+/// subtle background fill) and hairline seams. The strip sits in the (transparent)
 /// title-bar region, so the native traffic lights show through on the left.
 /// All data shown is real session state — nothing fabricated.
 
 // MARK: - Launch-screen session state
 
 /// The live Claude state of a session as surfaced on the launch screen. Only
-/// *open* sessions have a real state; everything listed but not open is `idle`.
+/// *open* sessions have a real state; everything listed but not open is
+/// `detached`.
 enum LaunchSessionState {
-    case done, awaiting, working, active, idle
+    case done, awaiting, active, detached
 }
 
 // MARK: - Row model
@@ -230,13 +231,15 @@ private final class SessionTabView: NSView {
         nameLabel.frame.size.width = width - nameX - 26
         closeBtn.frame = NSRect(x: width - 24, y: (height - 16) / 2, width: 16, height: 16)
 
-        // Active underline (sits just above the strip's bottom hairline).
+        // The active tab's fill paints over the strip's bottom hairline (drawn
+        // in SessionStrip.draw, behind subviews). Redraw that seam on top so the
+        // active session stays separated from the pane tab bar directly below.
         if isActive {
-            let underline = NSView(frame: NSRect(x: 0, y: 1, width: width, height: 2))
-            underline.autoresizingMask = [.width]
-            underline.wantsLayer = true
-            underline.layer?.backgroundColor = Theme.accent.cgColor
-            addSubview(underline)
+            let bottomBorder = NSView(frame: NSRect(x: 0, y: 0, width: width, height: 1))
+            bottomBorder.autoresizingMask = [.width]
+            bottomBorder.wantsLayer = true
+            bottomBorder.layer?.backgroundColor = Theme.line1.cgColor
+            addSubview(bottomBorder)
         }
 
         // Right hairline seam between tabs.
