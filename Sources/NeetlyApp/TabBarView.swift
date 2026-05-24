@@ -203,16 +203,6 @@ private class TabButton: NSView {
         frame.size = NSSize(width: width, height: height)
         label.frame.size.width = width - x - 26
         closeBtn.frame = NSRect(x: width - 24, y: (height - 16) / 2, width: 16, height: 16)
-
-        // Active tab: a thin accent underline at the bottom — consistent with
-        // the session strip — instead of a chunky filled pill.
-        if isActive {
-            let underline = NSView(frame: NSRect(x: 0, y: 1, width: width, height: 2))
-            underline.autoresizingMask = [.width]
-            underline.wantsLayer = true
-            underline.layer?.backgroundColor = Theme.accent.cgColor
-            addSubview(underline)
-        }
     }
 
     @available(*, unavailable)
