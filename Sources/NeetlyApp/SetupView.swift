@@ -240,8 +240,8 @@ struct RepoListScreen: View {
         ) { p in
             Button("Delete", role: .destructive) { performDelete(p) }
             Button("Cancel", role: .cancel) { }
-        } message: { _ in
-            Text("The worktree associated with the session will be permanently deleted.")
+        } message: { p in
+            Text("“\(p.entry.sessionName)” and its associated worktree will be permanently deleted.")
         }
         .alert(
             "Delete repo?",
@@ -1036,8 +1036,8 @@ struct SessionListScreen: View {
                 }
             }
             Button("Cancel", role: .cancel) { }
-        } message: { _ in
-            Text("The worktree associated with the session will be permanently deleted.")
+        } message: { target in
+            Text("“\(target.sessionName)” and its associated worktree will be permanently deleted.")
         }
     }
 }
