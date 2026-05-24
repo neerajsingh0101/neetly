@@ -432,7 +432,7 @@ private struct RepoGroupRow: View {
                 .buttonStyle(.plain)
 
                 Menu {
-                    Button("Edit Layout\u{2026}", action: onEditLayout)
+                    Button("Edit Layout", action: onEditLayout)
                     Divider()
                     Button("Delete Repo", role: .destructive, action: onDeleteRepo)
                 } label: {
