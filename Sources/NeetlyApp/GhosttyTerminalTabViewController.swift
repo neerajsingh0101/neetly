@@ -40,19 +40,7 @@ final class GhosttyTerminalTabViewController: NSViewController, TerminalTab {
         return TerminalConfiguration { builder in
             builder.withFontFamily(cfg.fontFamily ?? "JetBrains Mono")
             builder.withFontSize(Float(cfg.fontSize ?? 17))
-            if cfg.theme == TerminalConfig.neetlyThemeName {
-                // The built-in Neetly theme — the app's design tokens as a
-                // ghostty palette, so terminal content matches the chrome.
-                builder.withBackground(NeetlyTerminalTheme.background)
-                builder.withForeground(NeetlyTerminalTheme.foreground)
-                builder.withCursorColor(NeetlyTerminalTheme.cursor)
-                builder.withSelectionBackground(NeetlyTerminalTheme.selection)
-                for index in NeetlyTerminalTheme.palette.keys.sorted() {
-                    if let color = NeetlyTerminalTheme.palette[index] {
-                        builder.withPalette(index, color: color)
-                    }
-                }
-            } else if let themeName = cfg.theme,
+            if let themeName = cfg.theme,
                let theme = GhosttyThemeCatalog.theme(named: themeName) {
                 // A picked theme owns every color. Theme hex values are bare
                 // ("1e1e2e"); ghostty config wants a leading "#".

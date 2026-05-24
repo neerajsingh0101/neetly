@@ -10,23 +10,17 @@ struct TerminalConfig: Codable {
     var scrollback: Int?
     var theme: String?
 
-    /// The built-in terminal theme derived from the app's design tokens (see
-    /// `NeetlyTerminalTheme`) — what the terminal uses out of the box so it
-    /// matches the chrome. Resolved specially in `makeConfiguration`.
-    static let neetlyThemeName = "Neetly Default"
-    /// Sentinel meaning "use the explicit color fields below" — the user's
-    /// editable custom palette, listed in the picker beside the catalog themes.
-    static let customThemeName = "Custom"
-    /// The theme every install gets until the user picks another one.
-    static let defaultThemeName = neetlyThemeName
+    /// The theme every install gets until the user picks another one. A real
+    /// catalog theme name — no built-in sentinels.
+    static let defaultThemeName = "Catppuccin Mocha"
 
     static let `default` = TerminalConfig(
         fontFamily: nil,
         fontSize: 17,
-        backgroundColor: NeetlyTerminalTheme.background,
-        foregroundColor: NeetlyTerminalTheme.foreground,
-        selectionColor: NeetlyTerminalTheme.selection,
-        linkColor: NeetlyTerminalTheme.cursor,
+        backgroundColor: "#1e1e2e",
+        foregroundColor: "#cdd6f4",
+        selectionColor: "#585b70",
+        linkColor: "#89b4fa",
         scrollback: 10000,
         theme: defaultThemeName
     )
@@ -38,9 +32,15 @@ struct TerminalConfig: Codable {
               var config = try? JSONDecoder().decode(TerminalConfig.self, from: data) else {
             return .default
         }
-        // Installs that predate theming have no theme set — give them the
-        // default too, until they pick their own.
-        if config.theme == nil { config.theme = defaultThemeName }
+        // Installs that predate theming have no theme set, and installs from
+        // the brief "Neetly Default" / "Custom" era have stale built-in
+        // sentinels — give them the catalog default until they pick their own.
+        if config.theme == nil
+            || config.theme == "Neetly Default"
+            || config.theme == "Custom"
+        {
+            config.theme = defaultThemeName
+        }
         return config
     }
 
@@ -105,39 +105,6 @@ struct TerminalConfig: Codable {
         let brightBlue = "\u{1B}]4;12;rgb:\(r)/\(g)/\(b)\u{07}"
         return blue + brightBlue
     }
-}
-
-/// The built-in "Neetly Default" terminal theme: the app's design tokens
-/// (`Theme.swift`) expressed as a ghostty palette, so terminal content matches
-/// the chrome out of the box. The status hues (red/green/yellow/blue/magenta)
-/// are the exact Theme tokens; the greys/whites come from the Theme fg/bg ramp,
-/// and the cyan + bright slots (absent from the chrome palette) are tuned to sit
-/// with them.
-enum NeetlyTerminalTheme {
-    static let background = "#0D0F10"   // Theme.bg0
-    static let foreground = "#E9EBEE"   // Theme.fg1
-    static let cursor     = "#5B89FF"   // Theme.accent
-    static let selection  = "#232629"   // Theme.bg3
-
-    /// ANSI palette indices 0–15.
-    static let palette: [Int: String] = [
-        0:  "#1A1C1E",  // black          (Theme.bg2)
-        1:  "#F84B4B",  // red            (Theme.red)
-        2:  "#51C672",  // green          (Theme.green)
-        3:  "#F0B135",  // yellow         (Theme.amber)
-        4:  "#5B89FF",  // blue           (Theme.accent)
-        5:  "#A787F6",  // magenta        (Theme.violet)
-        6:  "#5BC6D6",  // cyan           (tuned)
-        7:  "#B4B8BB",  // white          (Theme.fg2)
-        8:  "#5A5E62",  // bright black   (Theme.fg4)
-        9:  "#FF6F6F",  // bright red
-        10: "#6FD98C",  // bright green
-        11: "#FFC95C",  // bright yellow
-        12: "#7BA0FF",  // bright blue
-        13: "#BBA0FF",  // bright magenta
-        14: "#7FD8E4",  // bright cyan
-        15: "#E9EBEE",  // bright white   (Theme.fg1)
-    ]
 }
 
 extension NSColor {

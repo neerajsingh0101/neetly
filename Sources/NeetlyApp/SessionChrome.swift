@@ -1,4 +1,5 @@
 import AppKit
+import SwiftUI
 
 /// The session-workspace chrome, in the Neetly design language:
 ///   ─ a horizontal session strip across the top (flat, sharp tabs)
@@ -65,6 +66,8 @@ final class SessionStrip: NSView {
     private let leftInset: CGFloat = 78
     private var tabViews: [SessionTabView] = []
     private let plusButton = NSButton()
+    private let themeButton = NSButton()
+    private var themePopover: NSPopover?
 
     override init(frame: NSRect) {
         super.init(frame: frame)
@@ -79,6 +82,18 @@ final class SessionStrip: NSView {
         plusButton.target = self
         plusButton.action = #selector(plusClicked)
         addSubview(plusButton)
+
+        // Theme palette — pinned to the far-right edge (see layout()). A theme
+        // is global, so it sits apart from the per-session tabs. The picker
+        // also lives in Settings; this is the quick-access entry point.
+        themeButton.image = Theme.symbol("paintpalette", size: 12.5)
+        themeButton.imagePosition = .imageOnly
+        themeButton.isBordered = false
+        themeButton.contentTintColor = Theme.fg3
+        themeButton.toolTip = "Terminal Theme"
+        themeButton.target = self
+        themeButton.action = #selector(themeClicked)
+        addSubview(themeButton)
     }
 
     @available(*, unavailable)
@@ -103,16 +118,39 @@ final class SessionStrip: NSView {
         }
 
         plusButton.frame = NSRect(x: x + 4, y: (Self.barHeight - 22) / 2, width: 26, height: 22)
+        // Keep the theme button above tabs in z-order so it stays visible
+        // even if many sessions push tab views toward the right edge.
+        addSubview(themeButton, positioned: .above, relativeTo: nil)
     }
 
     /// Re-apply themed colors after a theme change (tabs are rebuilt by `update`).
     func applyTheme() {
         layer?.backgroundColor = Theme.bg0.cgColor
         plusButton.contentTintColor = Theme.fg3
+        themeButton.contentTintColor = Theme.fg3
         needsDisplay = true
     }
 
     @objc private func plusClicked() { onNewSession?() }
+
+    @objc private func themeClicked() {
+        let popover = NSPopover()
+        popover.behavior = .transient
+        popover.contentSize = NSSize(width: 320, height: 460)
+        popover.contentViewController = NSHostingController(rootView: ThemePickerView())
+        popover.show(relativeTo: themeButton.bounds, of: themeButton, preferredEdge: .minY)
+        themePopover = popover
+    }
+
+    override func layout() {
+        super.layout()
+        themeButton.frame = NSRect(
+            x: bounds.width - 22 - 12,
+            y: (Self.barHeight - 22) / 2,
+            width: 22,
+            height: 22
+        )
+    }
 
     override func draw(_ dirtyRect: NSRect) {
         super.draw(dirtyRect)
