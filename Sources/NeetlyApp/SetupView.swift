@@ -202,15 +202,6 @@ struct RepoListScreen: View {
         repos.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
     }
     private var totalSessions: Int { sessionsByRepo.values.reduce(0) { $0 + $1.count } }
-    private var needInput: Int {
-        var n = 0
-        for (repoName, entries) in sessionsByRepo {
-            for e in entries where liveLaunchState(repoName: repoName, worktreeName: e.worktreeName) == .awaiting {
-                n += 1
-            }
-        }
-        return n
-    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -321,10 +312,6 @@ struct RepoListScreen: View {
         HStack(spacing: 0) {
             Text("\(repos.count) repos · \(totalSessions) sessions")
                 .foregroundColor(Theme.fg3C)
-            if needInput > 0 {
-                Text(" · ").foregroundColor(Theme.fg4C)
-                Text("\(needInput) need input").foregroundColor(Theme.redC)
-            }
         }
         .font(.system(size: 13, design: .monospaced))
     }
