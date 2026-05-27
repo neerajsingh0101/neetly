@@ -194,6 +194,7 @@ struct RepoListScreen: View {
     var onLaunchSession: (RepoConfig, String, String) -> Void
 
     @State private var expanded: Set<UUID> = []
+    @State private var sessionsExpanded: Set<UUID> = []
     @State private var sessionsByRepo: [String: [SessionListEntry]] = [:]
     @State private var pendingDelete: PendingSessionDelete?
     @State private var pendingRepoDelete: RepoConfig?
@@ -213,7 +214,9 @@ struct RepoListScreen: View {
                             repo: repo,
                             sessions: sessionsByRepo[repo.name] ?? [],
                             isExpanded: expanded.contains(repo.id),
+                            showSessions: sessionsExpanded.contains(repo.id),
                             onToggle: { toggle(repo) },
+                            onShowSessions: { sessionsExpanded.insert(repo.id) },
                             onLaunch: { entry in onLaunchSession(repo, entry.sessionName, entry.worktreeName) },
                             onNewSession: { onNewSession(repo) },
                             onEditLayout: { onEditLayout(repo) },
@@ -254,7 +257,7 @@ struct RepoListScreen: View {
             Button("Delete", role: .destructive) { performRepoDelete(repo) }
             Button("Cancel", role: .cancel) { }
         } message: { repo in
-            Text("“\(repo.name)” will be removed from neetly and all worktrees associated with the repo will be permanently deleted.")
+            Text("“\(repo.name)” will be removed from Neetly and all worktrees associated with the repo will be permanently deleted.")
         }
     }
 
@@ -264,7 +267,7 @@ struct RepoListScreen: View {
         VStack(spacing: 16) {
             HStack(alignment: .center) {
                 HStack(spacing: 0) {
-                    Text("neetly")
+                    Text("Neetly")
                         .font(.system(size: 40, weight: .bold, design: .monospaced))
                         .foregroundColor(Theme.fg1C)
                     BlinkingCaret()
@@ -323,14 +326,28 @@ struct RepoListScreen: View {
         for repo in sortedRepos {
             h += 52
             if expanded.contains(repo.id) {
-                h += CGFloat((sessionsByRepo[repo.name] ?? []).count) * 40 + 38
+                let sessionCount = (sessionsByRepo[repo.name] ?? []).count
+                if sessionCount == 0 {
+                    h += 38                                          // just "+ new session"
+                } else if sessionsExpanded.contains(repo.id) {
+                    h += CGFloat(sessionCount) * 40 + 38             // full list + "+ new session"
+                } else {
+                    h += 40 + 38                                     // "expand existing…" link + "+ new session"
+                }
             }
         }
         return h + 32
     }
 
     private func toggle(_ repo: RepoConfig) {
-        if expanded.contains(repo.id) { expanded.remove(repo.id) } else { expanded.insert(repo.id) }
+        if expanded.contains(repo.id) {
+            expanded.remove(repo.id)
+            // Tuck the sessions list back away so the next expand starts
+            // with only the "+ new session" + "expand existing…" link.
+            sessionsExpanded.remove(repo.id)
+        } else {
+            expanded.insert(repo.id)
+        }
     }
 
     private func reload() {
@@ -404,7 +421,9 @@ private struct RepoGroupRow: View {
     let repo: RepoConfig
     let sessions: [SessionListEntry]
     let isExpanded: Bool
+    let showSessions: Bool
     var onToggle: () -> Void
+    var onShowSessions: () -> Void
     var onLaunch: (SessionListEntry) -> Void
     var onNewSession: () -> Void
     var onEditLayout: () -> Void
@@ -462,13 +481,31 @@ private struct RepoGroupRow: View {
             .background(RoundedRectangle(cornerRadius: 10).fill(isExpanded ? Theme.bg2C : Color.clear))
 
             if isExpanded {
-                ForEach(sessions) { entry in
-                    LaunchSessionRow(
-                        repoName: repo.name,
-                        entry: entry,
-                        onLaunch: { onLaunch(entry) },
-                        onDelete: { onDeleteSession(entry) }
-                    )
+                if showSessions {
+                    ForEach(sessions) { entry in
+                        LaunchSessionRow(
+                            repoName: repo.name,
+                            entry: entry,
+                            onLaunch: { onLaunch(entry) },
+                            onDelete: { onDeleteSession(entry) }
+                        )
+                    }
+                } else if !sessions.isEmpty {
+                    // Existing sessions stay tucked away behind a link by
+                    // default — click to reveal, then the link disappears.
+                    Button(action: onShowSessions) {
+                        HStack(spacing: 7) {
+                            Image(systemName: "chevron.right")
+                            Text("expand existing sessions list")
+                        }
+                        .font(.system(size: 13))
+                        .foregroundColor(Theme.fg4C)
+                        .padding(.leading, 42)
+                        .padding(.vertical, 9)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
                 }
                 Button(action: onNewSession) {
                     HStack(spacing: 7) {
@@ -1068,7 +1105,7 @@ struct SettingsScreen: View {
             }
             .padding(20)
 
-            Text("neetly")
+            Text("Neetly")
                 .font(.system(size: 29, weight: .bold, design: .monospaced))
                 .padding(.horizontal, 20)
                 .padding(.bottom, 24)
@@ -1085,7 +1122,7 @@ struct SettingsScreen: View {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("Worktree Directory")
                             .font(.system(size: 16, weight: .medium))
-                        Text("The directory where neetly creates git worktrees for your sessions.")
+                        Text("The directory where Neetly creates git worktrees for your sessions.")
                             .font(.system(size: 13))
                             .foregroundColor(.secondary)
                         HStack {

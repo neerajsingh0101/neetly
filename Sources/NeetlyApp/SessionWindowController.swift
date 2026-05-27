@@ -188,7 +188,7 @@ class SessionWindowController: NSWindowController {
             backing: .buffered,
             defer: false
         )
-        window.title = "neetly"
+        window.title = "Neetly"
         window.center()
         window.setFrameAutosaveName("SessionWindow")
         // The design is dark-mode-first with its own breadcrumb title bar. Pin
@@ -362,7 +362,7 @@ class SessionWindowController: NSWindowController {
         ws.splitTree.view.autoresizingMask = [.width, .height]
         contentArea.addSubview(ws.splitTree.view)
 
-        window?.title = "neetly - \(ws.config.repoName) - \(ws.config.sessionName)"
+        window?.title = "Neetly - \(ws.config.repoName) - \(ws.config.sessionName)"
         refreshTabBar()
     }
 
@@ -400,7 +400,7 @@ class SessionWindowController: NSWindowController {
 
         if sessions.isEmpty {
             activeIndex = -1
-            window?.title = "neetly"
+            window?.title = "Neetly"
             prRefreshTimer?.invalidate()
             prRefreshTimer = nil
             diffStatsTimer?.invalidate()
