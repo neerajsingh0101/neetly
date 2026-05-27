@@ -11,7 +11,7 @@ class SetupWindowController: NSWindowController {
             backing: .buffered,
             defer: false
         )
-        window.title = "neetly"
+        window.title = "Neetly"
         window.center()
         // Dark-mode-first, matching the session window and the rest of the app.
         window.appearance = NSAppearance(named: .darkAqua)
