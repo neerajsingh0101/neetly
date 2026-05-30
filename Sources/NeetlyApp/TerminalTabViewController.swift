@@ -228,6 +228,15 @@ class TerminalTabViewController: NSViewController, LocalProcessTerminalViewDeleg
         terminalView.send(data: bytes[...])
     }
 
+    func clearTerminal() {
+        // SwiftTerm has no single clear action: feed CSI 3J straight to the
+        // emulator to drop the scrollback, then send Ctrl+L so the shell
+        // clears the viewport and redraws the prompt — together matching
+        // ghostty's clear_screen (screen + scrollback).
+        terminalView.getTerminal().feed(text: "\u{1b}[3J")
+        sendText("\u{0C}")
+    }
+
     /// Tear down the terminal cleanly: SIGTERM to the foreground job (so
     /// servers release their ports), then terminate the shell and close the PTY.
     ///

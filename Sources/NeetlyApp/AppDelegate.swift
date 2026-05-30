@@ -182,6 +182,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         newBrowserItem.keyEquivalentModifierMask = [.command, .shift]
         paneMenu.addItem(withTitle: "Close Tab", action: #selector(closeCurrentTab), keyEquivalent: "w")
         paneMenu.addItem(withTitle: "Reload Browser", action: #selector(reloadBrowser), keyEquivalent: "r")
+        paneMenu.addItem(withTitle: "Clear Terminal", action: #selector(clearTerminal), keyEquivalent: "k")
 
         paneMenu.addItem(.separator())
         paneMenu.addItem(withTitle: "Split Right", action: #selector(splitRight), keyEquivalent: "d")
@@ -195,7 +196,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         paneMenu.addItem(.separator())
         paneMenu.addItem(withTitle: "Focus Pane Left", action: #selector(focusPaneLeft), keyEquivalent: "h")
         paneMenu.addItem(withTitle: "Focus Pane Down", action: #selector(focusPaneDown), keyEquivalent: "j")
-        paneMenu.addItem(withTitle: "Focus Pane Up", action: #selector(focusPaneUp), keyEquivalent: "k")
+        // ⌘⌥↑ rather than ⌘K — ⌘K is reserved for Clear Terminal (the
+        // classic iTerm/Terminal shortcut), so up focus breaks the h/j/k/l
+        // symmetry. ⌘⌥↑ (not plain ⌘↑, which means "scroll to top" in many
+        // apps) uses the arrow instead.
+        let focusUpItem = paneMenu.addItem(withTitle: "Focus Pane Up", action: #selector(focusPaneUp), keyEquivalent: "\u{F700}")
+        focusUpItem.keyEquivalentModifierMask = [.command, .option]
         paneMenu.addItem(withTitle: "Focus Pane Right", action: #selector(focusPaneRight), keyEquivalent: "l")
 
         let focusTabItem = NSMenuItem(title: "Focus Tab", action: nil, keyEquivalent: "")
@@ -317,7 +323,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func clearTerminal() {
         if let pane = findFocusedPane(), let terminal = pane.activeTerminalTab() {
-            terminal.sendText("\u{0C}")
+            terminal.clearTerminal()
         }
     }
 
