@@ -11,6 +11,8 @@ protocol TerminalTab: NSViewController {
     var onProcessExited: (() -> Void)? { get set }
     func focusTerminal()
     func sendText(_ text: String)
+    /// Clear the terminal — visible screen and scrollback history (⌘K).
+    func clearTerminal()
     func terminateProcess()
 }
 

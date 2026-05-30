@@ -218,6 +218,13 @@ final class GhosttyTerminalTabViewController: NSViewController, TerminalTab {
         terminalView.sendText(text)
     }
 
+    func clearTerminal() {
+        // ghostty's own clear action wipes the visible screen *and* the
+        // scrollback (matching iTerm/Terminal ⌘K), unlike sending Ctrl+L
+        // which only clears what's on screen.
+        terminalView.performBindingAction("clear_screen")
+    }
+
     func terminateProcess() {
         // Tearing down the view frees the ghostty surface, which closes the
         // PTY and sends SIGHUP to the foreground process group — enough to
