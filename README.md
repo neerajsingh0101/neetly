@@ -283,7 +283,8 @@ neetly notify clear        # reset to normal
 
 | Shortcut | Action |
 |---|---|
-| Cmd+H / Cmd+J / Cmd+K / Cmd+L | Focus pane left / down / up / right |
+| Cmd+H / Cmd+J / Cmd+L | Focus pane left / down / right |
+| Cmd+Opt+Up | Focus pane up |
 | Cmd+D / Cmd+Shift+D | Split pane right / down |
 | Cmd+Shift+W | Close pane |
 | Cmd+Shift+M | Maximize / restore pane |
@@ -313,7 +314,8 @@ neetly notify clear        # reset to normal
 
 | Shortcut | Action |
 |---|---|
-| Ctrl+L | Clear terminal (handled by the shell) |
+| Cmd+K | Clear terminal (screen + scrollback) |
+| Ctrl+L | Clear visible screen (handled by the shell) |
 | Cmd+, | Open Settings |
 | Cmd+Q | Quit neetly |
 | Cmd+Click | Open a URL displayed in the terminal |
