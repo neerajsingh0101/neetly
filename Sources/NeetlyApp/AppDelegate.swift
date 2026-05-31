@@ -194,15 +194,21 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         maximizeItem.keyEquivalentModifierMask = [.command, .shift]
 
         paneMenu.addItem(.separator())
-        paneMenu.addItem(withTitle: "Focus Pane Left", action: #selector(focusPaneLeft), keyEquivalent: "h")
-        paneMenu.addItem(withTitle: "Focus Pane Down", action: #selector(focusPaneDown), keyEquivalent: "j")
-        // ⌘⌥↑ rather than ⌘K — ⌘K is reserved for Clear Terminal (the
-        // classic iTerm/Terminal shortcut), so up focus breaks the h/j/k/l
-        // symmetry. ⌘⌥↑ (not plain ⌘↑, which means "scroll to top" in many
-        // apps) uses the arrow instead.
-        let focusUpItem = paneMenu.addItem(withTitle: "Focus Pane Up", action: #selector(focusPaneUp), keyEquivalent: "\u{F700}")
+        // Pane focus is ⌘⌥H/J/K/L: ⌥ is our "focus/navigate" modifier (it also
+        // carries session focus, ⌘⌥1–9), and ⌘⌥-hjkl mirrors AeroSpace's
+        // alt-hjkl-for-focus muscle memory. Living on ⌥ frees ⌘K for Clear
+        // Terminal and keeps clean h/j/k/l symmetry (no arrow-key workaround for
+        // "up"). Note: ⌘⌥H shadows macOS "Hide Others" — same deliberate
+        // override as ⌘H ("Hide"); the local key monitor intercepts it before
+        // it reaches the system.
+        let focusLeftItem = paneMenu.addItem(withTitle: "Focus Pane Left", action: #selector(focusPaneLeft), keyEquivalent: "h")
+        focusLeftItem.keyEquivalentModifierMask = [.command, .option]
+        let focusDownItem = paneMenu.addItem(withTitle: "Focus Pane Down", action: #selector(focusPaneDown), keyEquivalent: "j")
+        focusDownItem.keyEquivalentModifierMask = [.command, .option]
+        let focusUpItem = paneMenu.addItem(withTitle: "Focus Pane Up", action: #selector(focusPaneUp), keyEquivalent: "k")
         focusUpItem.keyEquivalentModifierMask = [.command, .option]
-        paneMenu.addItem(withTitle: "Focus Pane Right", action: #selector(focusPaneRight), keyEquivalent: "l")
+        let focusRightItem = paneMenu.addItem(withTitle: "Focus Pane Right", action: #selector(focusPaneRight), keyEquivalent: "l")
+        focusRightItem.keyEquivalentModifierMask = [.command, .option]
 
         let focusTabItem = NSMenuItem(title: "Focus Tab", action: nil, keyEquivalent: "")
         let focusTabMenu = NSMenu(title: "Focus Tab")

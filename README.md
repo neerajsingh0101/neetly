@@ -283,7 +283,7 @@ neetly notify clear        # reset to normal
 
 | Shortcut | Action |
 |---|---|
-| Cmd+H / Cmd+J / Cmd+K / Cmd+L | Focus pane left / down / up / right |
+| Cmd+Opt+H / Cmd+Opt+J / Cmd+Opt+K / Cmd+Opt+L | Focus pane left / down / up / right |
 | Cmd+D / Cmd+Shift+D | Split pane right / down |
 | Cmd+Shift+W | Close pane |
 | Cmd+Shift+M | Maximize / restore pane |
