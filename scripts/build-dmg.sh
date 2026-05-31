@@ -88,7 +88,7 @@ cat > "$APP_DIR/Contents/Info.plist" << PLIST
     <key>SUFeedURL</key>
     <string>https://github.com/neetozone/neetly/releases/latest/download/appcast.xml</string>
     <key>SUPublicEDKey</key>
-    <string>MTOhMS5Et1FT33Nz2xkxGl6jbOOtzgt5LVFZCA4w3kg=</string>
+    <string>L0ljaNTkCDOrcaLiMg8NIPHt+XLj5dr+Fp4dZ9AmsR8=</string>
     <key>SUEnableAutomaticChecks</key>
     <true/>
 </dict>
