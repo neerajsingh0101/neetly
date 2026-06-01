@@ -283,7 +283,7 @@ neetly notify clear        # reset to normal
 
 | Shortcut | Action |
 |---|---|
-| Cmd+H / Cmd+J / Cmd+K / Cmd+L | Focus pane left / down / up / right |
+| Cmd+Opt+H / Cmd+Opt+J / Cmd+Opt+K / Cmd+Opt+L | Focus pane left / down / up / right |
 | Cmd+D / Cmd+Shift+D | Split pane right / down |
 | Cmd+Shift+W | Close pane |
 | Cmd+Shift+M | Maximize / restore pane |
@@ -298,6 +298,7 @@ neetly notify clear        # reset to normal
 | Cmd+Shift+T | New browser tab |
 | Cmd+W | Close tab |
 | Cmd+R | Reload browser |
+| Cmd+K | Clear terminal |
 | Cmd+G / Cmd+Shift+G | Open / close diff |
 
 **Sessions**
